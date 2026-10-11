@@ -20,6 +20,48 @@ const node = {
   last_seen_ago: 5,
   expires_in: 20,
 };
+test("offline nodes retain memory and disk history from hardware totals", async ({
+  page,
+}) => {
+  const backend = await hub(page);
+  await page.goto("/#/node/1");
+  await expect(page.locator(".detail-header")).toContainText("Live node");
+  backend.socket()!.send(
+    JSON.stringify({
+      nodes: [
+        {
+          ...node,
+          name: "Offline node",
+          online: false,
+          metrics: null,
+          mem_total: 8192,
+          disk_total: 8192,
+        },
+      ],
+    }),
+  );
+  await expect(page.locator(".detail-header")).toContainText("Offline node");
+  await page.getByRole("button", { name: "性能监视器" }).click();
+  await expect(page.locator(".detail-chart-grid .graph-line path")).toHaveCount(
+    3,
+  );
+});
+test("network history errors remain visible with a retry action", async ({
+  page,
+}) => {
+  await hub(page, { historyError: true });
+  await page.goto("/#/node/1");
+  await page.getByRole("button", { name: "网络流量" }).click();
+  await expect(page.locator(".detail-chart-grid")).toContainText(
+    "查询历史的请求太多",
+  );
+  await expect(
+    page
+      .locator(".detail-chart-grid")
+      .getByRole("button", { name: "重试历史" })
+      .first(),
+  ).toBeVisible();
+});
 async function hub(
   page: Page,
   options: {

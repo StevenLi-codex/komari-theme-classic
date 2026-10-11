@@ -5,6 +5,15 @@ import { sanitizeNodes, getMe } from "../src/api.ts";
 import { chartSvg, chartFromHistory } from "../src/chart.ts";
 import { loadConfig, defaults } from "../src/config.ts";
 const base = { id: 1, name: "Node", online: true };
+test("history uses sample timestamps and breaks missing aggregate intervals", () => {
+  const chart = chartSvg([10, 20, 30], "CPU", 106, 90, {
+    timestamps: [100, 110, 200],
+    step: 10,
+  });
+  assert.ok(chart.includes("M3.0,") && chart.includes("L13.0,"));
+  assert.ok(chart.includes("M103.0,"));
+  assert.ok(!chart.includes("L103.0,"));
+});
 test("invalid metrics have a distinct state from awaiting the first report", () => {
   assert.equal(nodeState({ ...base, metrics: null }), "pending");
   assert.equal(nodeState({ ...base, metrics: { cpu: 20 } }), "invalid");

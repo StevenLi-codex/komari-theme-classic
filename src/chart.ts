@@ -5,15 +5,43 @@ export function chartSvg(
   label = "CPU（24小时）",
   width = 280,
   height = 90,
-  options: { hours?: number; end?: number; unit?: string } = {},
+  options: {
+    hours?: number;
+    timestamps?: number[];
+    step?: number;
+    unit?: string;
+  } = {},
 ): string {
   const data = points.slice(-120);
+  const times = options.timestamps?.slice(-120);
+  const timed =
+    times?.length === data.length &&
+    times.every(valid) &&
+    times.every((ts, i) => !i || ts >= times[i - 1]);
+  const start = timed ? times![0] : undefined;
+  const end = timed ? times!.at(-1) : undefined;
   const hasData = data.some(valid);
   const segments: string[] = [];
   let partial: string[] = [];
   data.forEach((v, i) => {
+    if (
+      timed &&
+      i &&
+      valid(options.step) &&
+      options.step > 0 &&
+      times![i] - times![i - 1] > options.step * 1.5 &&
+      partial.length
+    ) {
+      segments.push(partial.join(" "));
+      partial = [];
+    }
     if (valid(v)) {
-      const x = 3 + (i / Math.max(data.length - 1, 1)) * (width - 6);
+      const fraction = timed
+        ? end! > start!
+          ? (times![i] - start!) / (end! - start!)
+          : 0.5
+        : i / Math.max(data.length - 1, 1);
+      const x = 3 + fraction * (width - 6);
       const y = height - 4 - (Math.min(100, v) / 100) * (height - 8);
       partial.push(
         `${partial.length ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`,
@@ -32,7 +60,6 @@ export function chartSvg(
     { length: 5 },
     (_, i) => `<path d="M0 ${((i * height) / 4).toFixed(1)}H${width}"/>`,
   ).join("");
-  const end = options.end;
   const stamp = (ts: number) =>
     new Date(ts * 1000).toLocaleString("zh-CN", {
       month: "2-digit",
@@ -41,13 +68,12 @@ export function chartSvg(
       minute: "2-digit",
       hour12: false,
     });
-  const left = end
-    ? stamp(end - (options.hours ?? 24) * 3600)
-    : `${options.hours ?? 24} 小时前`;
-  const right = end ? stamp(end) : "现在";
+  const left =
+    start !== undefined ? stamp(start) : `${options.hours ?? 24} 小时前`;
+  const right = end !== undefined ? stamp(end) : "现在";
   const last = [...data].reverse().find(valid);
   return `<div class="graph ${hasData ? "" : "graph-empty"}"><div class="graph-caption"><span>${html(label)}</span><span>${hasData && last !== undefined ? `${last.toFixed(1)}${html(options.unit ?? "%")}` : "暂无历史"}</span></div>
-    <div class="graph-plot"><span class="graph-scale graph-scale-top">100</span><span class="graph-scale graph-scale-bottom">0</span><svg class="graph-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${html(label)}：${hasData ? "历史趋势" : "暂无历史数据"}"><g class="graph-grid">${gridX}${gridY}</g><g class="graph-line">${segments.map((d) => `<path d="${d}"/>`).join("")}</g></svg>${hasData ? "" : '<span class="graph-no-data">暂无历史数据</span>'}</div>
+    <div class="graph-plot"><span class="graph-scale graph-scale-top">100</span><span class="graph-scale graph-scale-bottom">0</span><svg class="graph-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${html(label)}：${hasData ? "历史趋势" : "暂无历史数据"}"><g class="graph-grid">${gridX}${gridY}</g><g class="graph-line">${segments.map((d) => `<path d="${d}"/>${d.includes("L") ? "" : `<circle cx="${d.slice(1).split(",")[0]}" cy="${d.split(",")[1]}" r="2"/>`}`).join("")}</g></svg>${hasData ? "" : '<span class="graph-no-data">暂无历史数据</span>'}</div>
     <div class="graph-time"><span>${html(left)}</span><span>${html(right)}</span></div></div>`;
 }
 export function chartFromHistory(

@@ -292,7 +292,8 @@ function nodeChart(n: NodeInfo): string {
     return `<div class="history-placeholder history-error" title="${html(cached.error)}">历史暂不可用 · 点击查看详情</div>`;
   return chartSvg(cached?.data ?? [], label, 280, 90, {
     hours: historyHours,
-    end: cached?.raw?.metrics?.at(-1)?.ts,
+    timestamps: cached?.raw?.metrics?.map((p) => p.ts),
+    step: cached?.raw?.step,
   });
 }
 function nodeCard(n: NodeInfo) {
@@ -351,8 +352,13 @@ function historyWindows() {
   ];
 }
 function detailGraph(label: string, points: Array<number | null>) {
-  const raw = cachedHistory(detailId() ?? 0)?.raw;
-  return `<div class="detail-graph">${chartSvg(points, label, 480, 150, { hours: historyHours, end: raw?.metrics?.at(-1)?.ts })}</div>`;
+  const cached = cachedHistory(detailId() ?? 0);
+  if (!isDemo && !cached)
+    return '<div class="detail-muted">正在获取历史数据……</div>';
+  if (!isDemo && cached?.error)
+    return `<div class="history-error" role="status">${html(cached.error)} <button class="classic-button" data-action="refresh">重试历史</button></div>`;
+  const raw = cached?.raw;
+  return `<div class="detail-graph">${chartSvg(points, label, 480, 150, { hours: historyHours, timestamps: raw?.metrics?.map((p) => p.ts), step: raw?.step })}</div>`;
 }
 function detailHistory(node: NodeInfo) {
   const cached = cachedHistory(node.id);
@@ -400,16 +406,18 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
     ${detailPanel("节点摘要", grouped(["名称", node.name], ["节点编号", node.id], ["国家/地区", locationName(node.country)], ["分组", node.group || "未分组"], ["在线时间", duration(m?.uptime)], ["延迟", pingText(node)], ["最近上报", age(node)], ["备注", node.public_remark || "—"]))}</div>`;
   } else if (detailTab === "performance") {
     const c = cachedHistory(node.id);
+    const memTotal = m?.mem_total ?? node.mem_total;
+    const diskTotal = m?.disk_total ?? node.disk_total;
     const memData =
       c?.raw?.metrics?.map((pt) =>
-        valid(pt.mem_used) && valid(m?.mem_total) && m!.mem_total! > 0
-          ? Math.min(100, (pt.mem_used! / m!.mem_total!) * 100)
+        valid(pt.mem_used) && valid(memTotal) && memTotal > 0
+          ? Math.min(100, (pt.mem_used! / memTotal) * 100)
           : null,
       ) ?? [];
     const diskData =
       c?.raw?.metrics?.map((pt) =>
-        valid(pt.disk_used) && valid(m?.disk_total) && m!.disk_total! > 0
-          ? Math.min(100, (pt.disk_used! / m!.disk_total!) * 100)
+        valid(pt.disk_used) && valid(diskTotal) && diskTotal > 0
+          ? Math.min(100, (pt.disk_used! / diskTotal) * 100)
           : null,
       ) ?? [];
     content = `${detailPanel("实时资源", meterGrid)}<div class="detail-chart-grid">${detailPanel("CPU 历史", detailHistory(node))}${detailPanel("内存历史", detailGraph("内存使用率", isDemo ? demoChart(node.id + 3) : memData))}${detailPanel("硬盘历史", detailGraph("硬盘使用率", isDemo ? demoChart(node.id + 6) : diskData))}</div>`;
