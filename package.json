@@ -1,0 +1,27 @@
+{
+  "name": "x86-monitor-theme",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Classic Windows management console theme for Monitor Hub",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "preview": "node scripts/serve.mjs --dist",
+    "test": "npm run build && node --import tsx --test tests/*.test.ts tests/*.test.mjs",
+    "test:ui": "playwright test",
+    "check": "tsc --noEmit",
+    "format": "prettier --write src tests scripts/*.mjs *.json *.html playwright.config.ts",
+    "format:check": "prettier --check src tests scripts/*.mjs *.json *.html playwright.config.ts",
+    "screenshots": "npm run build && node scripts/capture-previews.mjs",
+    "pack": "npm run build && node scripts/python.mjs pack.py && node scripts/python.mjs verify_package.py",
+    "verify-package": "node scripts/python.mjs verify_package.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "esbuild": "0.28.2",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

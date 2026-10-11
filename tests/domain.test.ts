@@ -1,0 +1,69 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { nodeState, age, expDays, speed } from "../src/format.ts";
+import { sanitizeNodes, getMe } from "../src/api.ts";
+import { chartSvg, chartFromHistory } from "../src/chart.ts";
+import { loadConfig, defaults } from "../src/config.ts";
+const base = { id: 1, name: "Node", online: true };
+test("invalid metrics have a distinct state from awaiting the first report", () => {
+  assert.equal(nodeState({ ...base, metrics: null }), "pending");
+  assert.equal(nodeState({ ...base, metrics: { cpu: 20 } }), "invalid");
+  assert.equal(nodeState({ ...base, online: false, metrics: null }), "offline");
+});
+test("malformed optional fields cannot crash a valid node card", () => {
+  const [node] = sanitizeNodes([
+    { ...base, country: {}, group: [], metrics: { cpu: 20 } },
+  ]);
+  assert.equal(node.country, undefined);
+  assert.equal(node.group, undefined);
+  assert.equal(nodeState(node), "invalid");
+  assert.equal(sanitizeNodes([{ ...base, id: Infinity }]).length, 0);
+});
+test("Hub relative age wins over stale last_seen", () => {
+  assert.equal(
+    age({ ...base, last_seen: null, last_seen_ago: 120 }),
+    "2分钟前",
+  );
+  assert.equal(age({ ...base, last_seen_ago: null }), "从未上报");
+  assert.equal(
+    expDays({ ...base, expires_in: null, expires_at: "2000-01-01" }),
+    null,
+  );
+  assert.equal(expDays({ ...base, expires_in: NaN }), null);
+});
+test("charts escape text and give missing history an explicit empty state", () => {
+  const chart = chartSvg([null, null], "<img src=x>");
+  assert.ok(chart.includes("&lt;img"));
+  assert.ok(!chart.includes("<img"));
+  assert.ok(chart.includes("暂无历史"));
+  assert.deepEqual(
+    chartFromHistory([null, { cpu: 15 }, { cpu: "12" }] as never),
+    [null, 15, null],
+  );
+});
+test("null configuration falls back to declared defaults", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response("null", { status: 200 });
+  try {
+    assert.deepEqual(await loadConfig(), defaults);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+test("missing rate is not an invented zero", () => {
+  assert.equal(speed(undefined), "N/A");
+  assert.equal(speed(0), "0 b/s");
+});
+test("network speeds use decimal bit units", () => {
+  assert.equal(speed(1_825_000), "14.6 Mb/s");
+  assert.equal(speed(125_000_000), "1.0 Gb/s");
+});
+test("malformed station profile cannot reach the page state", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => new Response("null", { status: 200 });
+  try {
+    await assert.rejects(getMe(), /站点信息格式错误/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+theme.tar.gz
+theme.tar.gz.sha256
+*.zip
+__pycache__/

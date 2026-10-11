@@ -1,0 +1,107 @@
+import { test, expect } from "@playwright/test";
+
+test("console header, scoped summary and named cards form a clear hierarchy", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  await expect(page.locator(".node-window")).toHaveCount(8);
+  await expect(page.locator(".desktop-heading")).toContainText("节点管理器");
+  await expect(page.locator(".overview-strip")).toContainText("8");
+  await page.locator('[data-scope="group:生产环境"]').click();
+  await expect(page.locator(".node-window")).toHaveCount(4);
+  await expect(
+    page.locator('.overview-strip [data-summary="total"]'),
+  ).toHaveText("4");
+});
+test("mobile layout supports touch controls and long names without clipped content", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("/demo.html?scenario=edge");
+  await expect(page.locator(".node-window")).toHaveCount(8);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const card = page.locator(".node-window").first();
+  const body = await card.boundingBox();
+  expect(body!.width).toBeLessThan(360);
+  const button = await card.locator('[data-action="detail"]').boundingBox();
+  expect(button!.height).toBeGreaterThanOrEqual(28);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await expect(page.locator(".node-window").nth(1)).toContainText("离线");
+  await expect(page.locator(".node-window").nth(2)).toContainText("等待上报");
+  await expect(page.locator(".node-window").nth(3)).toContainText("指标异常");
+  await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  await card.press("Enter");
+  await expect(page.locator(".node-page")).toBeVisible();
+  await expect(page.locator("#history-range")).toBeVisible();
+  const overflow = await page
+    .locator(".detail-sections")
+    .evaluate((el) => el.scrollWidth > el.clientWidth);
+  expect(overflow).toBe(false);
+  expect(errors).toEqual([]);
+});
+test("dialog retains control focus and restores opener after close", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  await page.locator('[data-modal="settings"]').click();
+  await page.locator("#pref-compact").check();
+  await expect(page.locator("#pref-compact")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-modal="settings"]')).toBeFocused();
+  await page.reload();
+  await expect(page.locator("#view-select")).toHaveValue("compact");
+});
+
+test("back from properties restores the list scroll position and focused card", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/demo.html");
+  const card = page.locator('[data-node="7"]');
+  await card.scrollIntoViewIfNeeded();
+  await card.focus();
+  const top = await page.locator(".content").evaluate((el) => el.scrollTop);
+  await card.press("Enter");
+  await expect(page.locator(".node-page")).toBeVisible();
+  await page.locator('.detail-navigation [data-action="back"]').click();
+  await expect(card).toBeFocused();
+  expect(await page.locator(".content").evaluate((el) => el.scrollTop)).toBe(
+    top,
+  );
+});
+
+test("empty station and reduced motion keep a usable layout", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/demo.html?scenario=empty");
+  await expect(page.locator(".empty-state")).toContainText("暂无节点");
+  await expect(page.locator('[data-summary="total"]')).toHaveText("0");
+});
+
+for (const width of [320, 540, 700, 768, 960, 1280, 1440, 1920]) {
+  test(`console and all properties tabs fit ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/demo.html?scenario=edge");
+    await expect(page.locator(".node-window")).toHaveCount(8);
+    expect(
+      await page
+        .locator(".content")
+        .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+    ).toBe(true);
+    await page.locator(".node-window").first().press("Enter");
+    for (const tab of ["overview", "performance", "network", "hardware"]) {
+      await page.locator(`[data-tab="${tab}"]`).click();
+      expect(
+        await page
+          .locator(".detail-sections")
+          .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+      ).toBe(true);
+    }
+  });
+}
