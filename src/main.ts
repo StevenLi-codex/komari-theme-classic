@@ -416,7 +416,9 @@ function probePanel(n: NodeInfo): string {
     const lossText =
       valid(loss) && loss <= 100
         ? `${loss.toFixed(1)}%`
-        : points.length
+        : loss === undefined &&
+            points.length &&
+            points.every((p) => valid(p.latency))
           ? "0.0%"
           : "N/A";
     const plot = chartSvg(
@@ -440,7 +442,7 @@ function probePanel(n: NodeInfo): string {
   });
   const plot = allPoints.length
     ? chartSvg(
-        allPoints.map((p) => p.latency),
+        allPoints.some((p) => valid(p.latency)) ? [0] : [null],
         "三网延迟（ms）",
         720,
         180,
@@ -750,10 +752,14 @@ async function loadVisibleHistories() {
           hist.status === "fulfilled"
             ? chartFromHistory(hist.value.metrics)
             : [];
+        const latestPingTs =
+          pings.status === "fulfilled"
+            ? Math.max(...pings.value.ping.map((p) => p.ts))
+            : -1;
         const ping =
           pings.status === "fulfilled"
-            ? ([...pings.value.ping]
-                .sort((a, b) => b.ts - a.ts)
+            ? (pings.value.ping
+                .filter((p) => p.ts === latestPingTs)
                 .find((p) => valid(p.latency))?.latency ?? null)
             : null;
         if (epoch === historyEpoch && !document.hidden) {

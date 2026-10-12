@@ -20,6 +20,60 @@ const node = {
   last_seen_ago: 5,
   expires_in: 20,
 };
+test("a fully timed-out last probe cannot hide other successful carrier curves", async ({
+  page,
+}) => {
+  await hub(page, {
+    pingHistory: {
+      probes: { "1": "电信", "3": "移动" },
+      loss: { "3": 100 },
+      ping: [
+        ...Array.from({ length: 120 }, (_, i) => ({
+          task_id: 1,
+          ts: 100 + i * 60,
+          latency: 40,
+        })),
+        ...Array.from({ length: 120 }, (_, i) => ({
+          task_id: 3,
+          ts: 100 + i * 60,
+          latency: null,
+        })),
+      ],
+    },
+  });
+  await page.goto("/#/node/1");
+  await page.locator('[data-tab="network"]').click();
+  await expect(
+    page.locator(".probe-grid .probe-series").first().locator("path"),
+  ).toHaveCount(1);
+  await expect(page.locator(".probe-grid .graph-no-data")).toHaveCount(0);
+});
+test("latest timeouts do not reuse old latency or claim a zero loss rate", async ({
+  page,
+}) => {
+  await hub(page, {
+    pingHistory: {
+      probes: { "1": "电信" },
+      ping: [
+        { task_id: 1, ts: 100, latency: 40 },
+        { task_id: 1, ts: 110, latency: null },
+      ],
+    },
+  });
+  await page.goto("/#/node/1");
+  await expect(page.locator(".detail-graph .graph-line path")).toHaveCount(1);
+  await expect(
+    page
+      .locator(".properties dt")
+      .filter({ hasText: /^延迟$/ })
+      .locator("..")
+      .locator("dd"),
+  ).toHaveText("N/A");
+  await page.locator('[data-tab="network"]').click();
+  await expect(
+    page.locator(".probe-card").filter({ hasText: "电信" }),
+  ).toContainText("查询范围丢包率 N/A");
+});
 test("Hub probe names, timeout and aggregate loss render without invented carrier values", async ({
   page,
 }) => {
@@ -82,6 +136,7 @@ async function hub(
     noSocket?: boolean;
     delayNodes?: boolean;
     config?: unknown;
+    pingHistory?: unknown;
   } = {},
 ) {
   let socket: WebSocketRoute | undefined;
@@ -111,7 +166,7 @@ async function hub(
       }
       value =
         url.searchParams.get("series") === "ping"
-          ? {
+          ? (options.pingHistory ?? {
               probes: { "1": "真实电信", "2": "真实联通", "3": "真实移动" },
               loss: { "2": 12.5 },
               ping: [
@@ -120,7 +175,7 @@ async function hub(
                 { task_id: 2, ts: 110, latency: null },
                 { task_id: 3, ts: 110, latency: 61 },
               ],
-            }
+            })
           : {
               metrics: [
                 {
