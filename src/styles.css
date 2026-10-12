@@ -457,7 +457,7 @@ button:disabled {
   display: none;
 }
 .overview-strip {
-  width: 92%;
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
@@ -469,10 +469,10 @@ button:disabled {
     inset -1px -1px #e2e0d8;
 }
 .overview-strip > div {
-  padding: 13px 16px;
+  padding: 9px 12px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
   position: relative;
 }
