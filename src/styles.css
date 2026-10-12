@@ -2263,14 +2263,41 @@ button:disabled {
   background: #e6e3db;
 }
 .tree-folder-toggle .tree-toggle {
-  display: grid;
-  place-items: center;
-  width: 12px;
-  height: 12px;
-  border: 1px solid #7c7c75;
-  background: #fff;
-  font: 11px monospace;
+  position: relative;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 1px solid;
+  border-color: #fff #64615c #64615c #fff;
+  background: var(--face);
+  box-shadow:
+    inset -1px -1px #929088,
+    inset 1px 1px #eeece6;
+  font-size: 0;
   flex: none;
+}
+.tree-folder-toggle .tree-toggle::before,
+.tree-folder-toggle[aria-expanded="false"] .tree-toggle::after {
+  content: "";
+  position: absolute;
+  background: #20242b;
+}
+.tree-folder-toggle .tree-toggle::before {
+  width: 8px;
+  height: 2px;
+  left: 4px;
+  top: 7px;
+}
+.tree-folder-toggle[aria-expanded="false"] .tree-toggle::after {
+  width: 2px;
+  height: 8px;
+  left: 7px;
+  top: 4px;
+}
+.tree-folder-toggle:active .tree-toggle {
+  border-color: #64615c #fff #fff #64615c;
+  box-shadow: inset 1px 1px #929088;
+  transform: translate(1px, 1px);
 }
 /* Keep three columns, but make the text legible instead of tiny console labels. */
 .node-window .node-title {
