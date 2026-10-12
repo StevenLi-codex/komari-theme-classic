@@ -63,4 +63,4 @@ writeFileSync(
   join(dist, "demo.html"),
   index.replace(`/assets/${jsName}`, `/assets/${demoName}`),
 );
-console.log(`Built x86 Monitor ${manifest.version}: ${jsName}, ${cssName}`);
+console.log(`Built Monitor Classic ${manifest.version}: ${jsName}, ${cssName}`);

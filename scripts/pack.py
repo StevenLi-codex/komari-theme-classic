@@ -14,7 +14,7 @@ import io
 
 root = pathlib.Path(__file__).resolve().parent.parent
 manifest = json.loads((root / "theme.json").read_text(encoding="utf-8"))
-assert manifest["short"] == "x86-monitor"
+assert manifest["short"] == "monitor-classic"
 include = ["theme.json", "preview.png", "LICENSE", "THIRD_PARTY.md", "THIRD_PARTY_NOTICES.txt", "dist"]
 out = root / "theme.tar.gz"
 with out.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed, tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as archive:
@@ -46,3 +46,4 @@ with tarfile.open(out, "r:gz") as archive:
 print(f"Created {out.name}: {out.stat().st_size:,} bytes")
 print("SHA256:", hashlib.sha256(out.read_bytes()).hexdigest())
 (root / "theme.tar.gz.sha256").write_text(hashlib.sha256(out.read_bytes()).hexdigest() + "  theme.tar.gz\n", encoding="utf-8")
+

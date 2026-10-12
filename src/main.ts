@@ -25,8 +25,9 @@ import {
 import { chartSvg, chartFromHistory, demoChart } from "./chart.js";
 const root = document.getElementById("app")!;
 const buildVersion =
-  document.querySelector<HTMLMetaElement>('meta[name="x86-monitor-version"]')
-    ?.content || "开发版";
+  document.querySelector<HTMLMetaElement>(
+    'meta[name="monitor-classic-version"]',
+  )?.content || "开发版";
 const demo = (window as Window & { __X86_DEMO_NODES__?: NodeInfo[] })
   .__X86_DEMO_NODES__;
 const isDemo = Array.isArray(demo);
@@ -68,7 +69,7 @@ function navigationToggle() {
 }
 try {
   const prefs = JSON.parse(
-    localStorage.getItem("x86-monitor.preferences") || "{}",
+    localStorage.getItem("monitor-classic.preferences") || "{}",
   );
   if (prefs?.view === "compact") view = "compact";
   if (typeof prefs?.sidebar === "boolean") preferredSidebar = prefs.sidebar;
@@ -76,7 +77,7 @@ try {
 function savePreferences() {
   try {
     localStorage.setItem(
-      "x86-monitor.preferences",
+      "monitor-classic.preferences",
       JSON.stringify({ view, sidebar: preferredSidebar }),
     );
   } catch {}
@@ -691,7 +692,7 @@ function render() {
         ? listScroll
         : 0;
   previousRoute = routeKey;
-  root.innerHTML = `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/favicon.svg" alt="" /><div><span class="brand-kicker">X86 MONITOR / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
+  root.innerHTML = `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/favicon.svg" alt="" /><div><span class="brand-kicker">MONITOR CLASSIC / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
    ${renderSidebar()}<div class="main-column">${renderMain()}</div></div>${renderStatus()}</div>${renderModal()}`;
   const tree = root.querySelector(".tree-scroll");
   if (tree) tree.scrollTop = treeTop;
@@ -990,7 +991,7 @@ async function boot() {
   ]);
   if (conf.status === "fulfilled") config = conf.value;
   if (profile.status === "fulfilled") me = profile.value;
-  document.title = `${config.site_label || me.site_name || "节点管理器"} · x86 Monitor`;
+  document.title = `${config.site_label || me.site_name || "节点管理器"} · Monitor Classic`;
   if (!historyWindows().includes(historyHours))
     historyHours = Math.min(24, Math.max(...historyWindows()));
   if (config.show_chart || detailId() !== null) void loadVisibleHistories();

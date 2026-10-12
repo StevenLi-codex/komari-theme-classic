@@ -1,54 +1,121 @@
-# x86 Monitor
+# Monitor Classic · 经典监控台
 
-面向 Monitor Hub 的独立中文主题，使用 Windows 95/2000 管理控制台视觉：蓝色窗口标题、斜面边框、分段资源条与绿色性能曲线。当前版本 **0.3.0**，主题短名保持 `x86-monitor`，可更新已有同名主题。
+面向 [Monitor](https://github.com/monitor-probe/monitor) Hub 的独立中文主题，采用 Windows 95/2000 控制台风格：蓝色标题栏、立体边框、资源进度条、性能曲线与可折叠导航树。
+
+[下载 v1.0.0](https://github.com/ayingQAQ/monitor-theme-classic/releases/tag/v1.0.0) · [官方主题规范](https://monitor-document.pages.dev/dev/theme) · [主题收录要求](https://github.com/monitor-probe/themes#收录你的主题)
+
+![Monitor Classic 桌面预览，1920×1200](preview.png)
 
 ## 安装
 
-上传根目录的 `theme.tar.gz` 到 Hub → 主题管理，选择 x86 Monitor。`theme.tar.gz.sha256` 用于校验；源码 ZIP 不能作为安装包上传。包根目录直接包含 `theme.json` 与 `dist/`，不增加主题名目录。
+在最新版 Monitor Hub 后台「主题」→「从 GitHub 安装」填写：
 
-站点设置在 Hub 中保存：主标题、宽屏列数、导航、历史图、速率与公告。个人显示偏好保存在访客浏览器；存储不可用时仍能正常访问。
+```text
+https://github.com/ayingQAQ/monitor-theme-classic
+```
+
+安装后选择 **Monitor Classic**。也可从 Release 下载 `theme.tar.gz` 上传安装。不要上传 GitHub 自动生成的源码 ZIP。
+
+- 主题名称：`Monitor Classic`；短名：`monitor-classic`；版本：`1.0.0`。
+- 后续更新从清单 `url` 指向的仓库读取最新正式 Release。
+- 开发阶段的 `x86-monitor` 使用不同短名，请安装新的 `monitor-classic`，不会自动覆盖旧主题。
+- 登录、节点管理和探测任务由 Hub 后台提供。
+
+附件 `theme.tar.gz.sha256` 用于校验：
+
+```powershell
+Get-FileHash .\theme.tar.gz -Algorithm SHA256
+Get-Content .\theme.tar.gz.sha256
+```
+
+```bash
+sha256sum -c theme.tar.gz.sha256
+```
+
+## 功能
+
+- 桌面默认三列、卡片等比缩放；手机单列。节点管理器默认展开，节点、地区和分组文件夹可独立收起。
+- 在线状态、地区、分组筛选，名称搜索、紧凑视图、卡片最小化与恢复。
+- CPU、内存、硬盘、流量进度、剩余/额度、延迟、运行时间、实时网速。
+- 独立节点详情：概览、性能监视器、网络流量、硬件信息。
+- 三网延迟使用同一时间轴和毫秒刻度，显示最新延迟及查询范围丢包率。运营商按 Hub 的探测名称识别；需要配置对应电信、联通、移动探测，未配置时明确提示。
+- 文本/gzip WebSocket 串行解压、断线重连、轮询兜底，页面返回前台时恢复同步。
+- 离线、等待首次上报、指标异常、加载、无历史、请求失败分别显示；缺失数据用 `N/A`。
+- 剩余流量用额度减去 Hub 的计费用量 `month_used`，累计总流量取 Hub 累计接收与发送统计；支持不限量与超额状态。
+- 历史范围跟随 `history_days`，时间戳定位曲线，缺失区间保留断点。节点名称、备注、公告和探测名称安全转义。
+
+### 网络详情
+
+![三网延迟及流量详情，1920×1200](screenshot-network-desktop.png)
+
+### 手机布局
+
+<img src="screenshot-mobile.png" width="280" alt="手机预览，390×844，保持原始比例">
+
+截图使用明确标记的演示数据，不对应真实服务器。电脑预览统一 **1920×1200（16:10）**，手机为 **390×844**。图片仅指定显示宽度，保留原始比例。
+
+## 主题设置
+
+在 Hub 主题管理中保存，字段声明于 `theme.json`：
+
+| 设置 | 默认值 | 用途 |
+| --- | --- | --- |
+| `site_label` | 节点管理器 | 主标题 |
+| `columns` | 3 | 宽屏列数，2–5 |
+| `show_sidebar` | 开启 | 显示节点管理器 |
+| `show_chart` | 开启 | 显示卡片 CPU 历史 |
+| `show_traffic` | 开启 | 显示流量进度与网速 |
+| `notice` | 空 | 公告 |
+
+访客的紧凑视图、导航显示偏好保存在自己的浏览器；存储被禁用时仍能使用。
 
 ## 本地开发
 
-要求 Node.js 22+、npm；打包需要 Python 3.12+。不依赖全局 TypeScript。
+需要 Node.js 24、npm，打包需要 Python 3.12+。依赖通过 `package-lock.json` 固定。
 
-```powershell
+```bash
 npm ci
 npx playwright install chromium
 npm run dev
 ```
 
-默认地址 `http://127.0.0.1:4173`：
+打开 `http://127.0.0.1:4173/demo.html`。源码变化后自动重新构建，刷新查看。
 
-- `/`：真实同源 Hub 数据；断网不会替换成演示节点。
-- `/demo.html`：明确标注的演示页面。
-- `/demo.html?scenario=edge`：长名称、离线、等待上报、畸形指标、过期、特殊分组和文本转义案例。
-- `/demo.html?scenario=empty`：空站点。
-- `/#/node/{id}`：独立详情，四个分类页，支持浏览器返回、Esc 和直接刷新。
+| 入口 | 内容 |
+| --- | --- |
+| `/` | 真实同源 Hub 数据，不使用演示兜底 |
+| `/demo.html` | 演示节点 |
+| `/demo.html?scenario=edge` | 长名称、离线、等待、异常、过期、特殊分组 |
+| `/demo.html?scenario=empty` | 空站点 |
+| `/#/node/{id}` | 节点详情，支持刷新和浏览器返回 |
 
-开发服务器监听本机回环地址，保存 `src/`、`public/`、`theme.json` 后自动重新构建，手动刷新浏览器查看。`PORT` 可调整端口。
+接入测试 Hub：
 
 ```powershell
-$env:MONITOR_HUB = 'https://your-test-hub.example'
+$env:MONITOR_HUB = 'http://127.0.0.1:28080'
 npm run dev
 ```
 
-`MONITOR_HUB` 只供开发服务器使用，不写入浏览器代码。默认 `http://127.0.0.1:9911`，代理 `/api/*`、WebSocket `/api/ws` 和 `/admin`。登录、权限和节点管理由 Hub 处理。
+```bash
+MONITOR_HUB=http://127.0.0.1:28080 npm run dev
+```
+
+开发服务器监听回环地址，代理 `/api/*`、WebSocket `/api/ws` 和 `/admin`；`MONITOR_HUB` 不进入生产代码，`PORT` 可调整本地端口。
 
 ## 检查与打包
 
-```powershell
+```bash
 npm run check
+npm run format:check
 npm test
 npm run test:ui
 npm run screenshots
 npm run pack
-npm run verify-package
 ```
 
-`npm test` 包含构建、实际数据格式化与校验测试、归档资源哈希检查；`test:ui` 使用 Chromium 验证桌面、手机、八个屏幕宽度、四个详情分类、焦点和滚动恢复、文本/gzip 实时更新、陈旧 HTTP 回复、历史范围与失败重试、断流重连、轮询、权限错误和存储被禁用。
+浏览器回归覆盖 320–1920px、三列比例、四类详情、导航和文件夹收放、实际字号、焦点/滚动恢复、文本/gzip 更新、陈旧 HTTP 回复、断线恢复、历史失败重试、权限错误、存储不可用。
 
-截图命令自动启动临时预览服务，在根目录生成电脑、手机、详情与异常案例截图，`preview.png` 使用 1920×1200 电脑比例。正式包排除 `demo.html` 与演示数据脚本。
+截图命令更新 `preview.png`，并生成桌面、1280px 桌面、手机、详情、三网及异常案例截图。生产包排除演示入口和数据脚本。
 
 ```text
 theme.tar.gz
@@ -59,24 +126,23 @@ theme.tar.gz
 ├── THIRD_PARTY_NOTICES.txt
 └── dist/
     ├── index.html
-    ├── assets/           # SHA-256 内容哈希 JS/CSS
+    ├── assets/
     ├── flags/
-    ├── favicon.svg
-    └── apple-touch-icon.png
+    └── favicon.svg
 ```
 
-归档固定文件顺序和时间戳；相同构建与预览输入可重复生成相同校验值。验证覆盖 gzip CRC、文件类型、路径、数量、大小、版本与静态资源哈希。
+归档根目录直接含 `theme.json`、`dist/`。固定顺序和时间戳，附 SHA-256；验证 gzip 完整性、路径、文件类型、体积、数量、版本和资源内容哈希。
 
-## 结构与功能边界
+## 发布与收录
 
-`src/main.ts` 负责页面与交互，`api.ts` 负责 HTTP、WebSocket、串行解压和轮询，`format.ts` 负责状态/数值，`chart.ts` 负责 SVG 图表，`config.ts` 从 `theme.json` 读取默认配置。演示入口为 `demo-entry.ts`，数据为 `demo-data.ts`，与生产入口独立打包。页面不使用外部运行时 UI 库。
+公开仓库根目录提供 MIT `LICENSE`；清单 `url` 指向本仓库；版本 `1.0.0` 对应 `v1.0.0` tag。正式 Release 附件为 `theme.tar.gz` 与 `theme.tar.gz.sha256`，包内含 `preview.png`。
 
-离线、等待首次上报、指标异常分别显示；缺失数值显示 N/A。累计流量取 Hub 统计，历史范围依据 `history_days`；到期与最后上报优先使用 `expires_in`、`last_seen_ago`，只在旧 Hub 缺字段时回退。节点名称、备注、公告、地区与图表文字均转义为安全文本。
+按 [主题列表 README](https://github.com/monitor-probe/themes#收录你的主题) 申请收录时，只在 `themes.txt` 末尾增加本仓库地址；名称、简介、作者、版本和截图从最新正式 Release 读取。官方 PR 检查会将包安装进最新版 Hub。
 
-## 发布与已知验证边界
+CI 执行类型、格式、单元、浏览器和安装包检查；`Verify published release` 工作流使用官方主题列表检查器下载本仓库正式 Release，验证真实 Hub 安装。模拟接口回归不能替代真实 Hub 验收。
 
-本地测试使用真实浏览器与模拟 Hub 协议回复，不能替代实际 Hub 上传/升级验收。当前目录没有提供可访问的测试 Hub 和远端仓库地址，因此实际 Hub 安装、GitHub 安装和公开 Release 尚未验证。
+## 结构与许可证
 
-发布时设置 `theme.json.url` 为自己的仓库地址，版本 `0.3.0` 对应 tag `v0.3.0`；正式 Release 上传 `theme.tar.gz` 与校验文件。完成测试 Hub 验收后再提交主题列表收录。
+`src/api.ts` 处理协议和连接，`format.ts` 处理状态/数值，`chart.ts` 绘制 SVG，`main.ts` 组织页面，`config.ts` 读取清单。演示入口与生产入口单独构建。运行时不依赖外部 UI 库、字体或图标服务。
 
-官方资料：[主题开发](https://monitor-document.pages.dev/dev/theme)、[架构与协议](https://monitor-document.pages.dev/dev/architecture)、[默认主题](https://github.com/monitor-probe/monitor-theme-default)。
+采用 [MIT](LICENSE) 许可证，第三方说明见 [THIRD_PARTY.md](THIRD_PARTY.md) 与 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。不包含微软专有图形素材，不属于微软官方产品。

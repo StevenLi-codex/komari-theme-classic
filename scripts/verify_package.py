@@ -24,16 +24,16 @@ with tarfile.open(path, "r:gz") as archive:
     names = {m.name for m in members if m.isfile()}
     assert {"theme.json", "dist/index.html", "preview.png", "LICENSE", "THIRD_PARTY.md", "THIRD_PARTY_NOTICES.txt"} <= names, "Wrong archive root"
     assert not any("demo" in n for n in names), "Demo payload must not be shipped"
-    assert not any(n.startswith("x86-monitor/") for n in names), "Nested root directory"
+    assert not any(n.startswith("monitor-classic/") for n in names), "Nested root directory"
     assert not any(n.startswith("/") or ".." in pathlib.PurePosixPath(n).parts for n in names), "Unsafe member path"
     # Mimic the Hub staging directory: files must exist at staging/{name}.
-    with tempfile.TemporaryDirectory(prefix="x86-monitor-verify-") as temp:
+    with tempfile.TemporaryDirectory(prefix="monitor-classic-verify-") as temp:
         archive.extractall(temp, filter="data")
         staging = pathlib.Path(temp)
         assert (staging / "theme.json").is_file(), "Hub won't find theme.json"
         assert (staging / "dist/index.html").is_file(), "Hub won't find entry HTML"
         manifest = json.loads((staging / "theme.json").read_text(encoding="utf-8"))
-        assert manifest["short"] == "x86-monitor"
+        assert manifest["short"] == "monitor-classic"
         assert manifest["version"] == json.loads((root / "theme.json").read_text(encoding="utf-8"))["version"]
         html = (staging / "dist/index.html").read_text(encoding="utf-8")
         import re, hashlib
@@ -48,3 +48,4 @@ with tarfile.open(path, "r:gz") as archive:
         assert not b"Tokyo-01" in (staging / "dist/assets" / js.group(1)).read_bytes(), "Demo node dataset leaked into production"
         assert hashlib.sha256(path.read_bytes()).hexdigest() == (root / "theme.tar.gz.sha256").read_text().split()[0], "Package checksum mismatch"
         print(f"PASS: Hub-compatible theme.tar.gz, version {manifest['version']}, {len(members)} entries")
+

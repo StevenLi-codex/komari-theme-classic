@@ -111,6 +111,6 @@ server.on("upgrade", (req, client, head) => {
 });
 server.listen(port, "127.0.0.1", () =>
   console.log(
-    `x86 Monitor: http://127.0.0.1:${port}/demo.html | Hub: ${hub.origin}`,
+    `Monitor Classic: http://127.0.0.1:${port}/demo.html | Hub: ${hub.origin}`,
   ),
 );
