@@ -20,7 +20,7 @@
       "key": "columns",
       "type": "number",
       "label": "宽屏卡片列数",
-      "default": 4,
+      "default": 3,
       "min": 2,
       "max": 5
     },

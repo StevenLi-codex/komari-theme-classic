@@ -1,4 +1,22 @@
 import { test, expect } from "@playwright/test";
+test("desktop displays three cards per row with the same proportions across widths", async ({
+  page,
+}) => {
+  const ratios: number[] = [];
+  for (const width of [960, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/demo.html");
+    const cards = page.locator(".node-window");
+    await expect(cards).toHaveCount(8);
+    const boxes = await Promise.all(
+      [0, 1, 2, 3].map((i) => cards.nth(i).boundingBox()),
+    );
+    expect(Math.abs(boxes[0]!.y - boxes[2]!.y)).toBeLessThan(2);
+    expect(boxes[3]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height);
+    ratios.push(boxes[0]!.width / boxes[0]!.height);
+  }
+  expect(Math.max(...ratios) - Math.min(...ratios)).toBeLessThan(0.02);
+});
 test("cards show quota remaining and total traffic and detail shows three carriers", async ({
   page,
 }) => {

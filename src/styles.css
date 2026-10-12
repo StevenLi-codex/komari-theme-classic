@@ -2065,7 +2065,7 @@ button:disabled {
   }
 }
 /* Room for eight readable windows on a standard desktop, with compact chrome. */
-@media (min-width: 1181px) {
+@media (min-width: 901px) {
   .overview-strip > div {
     padding: 11px 15px;
   }
@@ -2169,5 +2169,30 @@ button:disabled {
   }
   .probe-card p {
     margin-bottom: 0;
+  }
+}
+.node-slot {
+  min-width: 0;
+  container-type: inline-size;
+}
+@media (min-width: 701px) {
+  .node-slot > .node-window {
+    width: 450px;
+    max-width: none;
+    zoom: calc(100cqw / 450px);
+  }
+}
+@media (min-width: 901px) {
+  .node-grid {
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 901px) {
+  .node-slot .node-title {
+    min-height: 33px;
+  }
+  .node-slot .node-footer {
+    margin: 0 -11px;
   }
 }

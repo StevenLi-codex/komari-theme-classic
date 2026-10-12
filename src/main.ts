@@ -594,7 +594,7 @@ function renderMain() {
           : `<div class="skeleton-grid" aria-label="正在加载节点">${Array.from({ length: 6 }, () => '<div class="skeleton-card"><div></div><span></span><span></span><span></span></div>').join("")}</div>`
         : !result.length
           ? `<div class="empty-state">${buttonIcon("folder")}<p>${a.length ? "没有匹配的节点" : "暂无节点"}</p><small>可以尝试切换分组、清空搜索，或恢复隐藏的卡片。</small><button class="classic-button" data-action="reset">显示全部节点</button></div>`
-          : `<div class="node-grid ${view === "compact" ? "compact-grid" : ""}" style="--cols:${config.columns}">${result.map(nodeCard).join("")}</div>`
+          : `<div class="node-grid ${view === "compact" ? "compact-grid" : ""}" style="--cols:${config.columns}">${result.map((n) => `<div class="node-slot">${nodeCard(n)}</div>`).join("")}</div>`
     }
   </main>`;
 }
