@@ -56,7 +56,7 @@ let me: Me = {};
 let scope = "all";
 let search = "";
 let view: "cards" | "compact" = "cards";
-let sidebarOpen = false;
+let sidebarOpen = window.innerWidth > 700;
 let preferredSidebar: boolean | undefined;
 try {
   const prefs = JSON.parse(
@@ -329,7 +329,7 @@ function nodeCard(n: NodeInfo) {
       isMin
         ? ""
         : `<div class="node-body">
-      <div class="node-identity"><div class="pc-picture">${flagImage(n.country, "hero-flag")}</div><div class="identity-text"><strong>${html(locationName(n.country))}</strong><div class="country-label" title="${html(n.group || "未分组")}">${html(n.group || "未分组")} · #${String(n.id).padStart(2, "0")}</div></div><div class="online-label ${status}"><span class="status-dot ${status}"></span>${stateZh(status)}</div></div>
+      <div class="node-identity"><div class="identity-text"><strong>${html(locationName(n.country))}</strong><div class="country-label" title="${html(n.group || "未分组")}">${html(n.group || "未分组")} · #${String(n.id).padStart(2, "0")}</div></div><div class="online-label ${status}"><span class="status-dot ${status}"></span>${stateZh(status)}</div></div>
       <div class="node-note ${note ? "state-note" : ""}" title="${html(note || n.public_remark || "")}">${html(note || n.public_remark || "实时资源监控")}</div>
       <div class="bevel-line"></div>
       <div class="meters">${meter("处理器", cp)}${meter("内存", rm, valid(n.metrics?.mem_used) ? bytes(n.metrics!.mem_used) : undefined)}${meter("硬盘", dk)}${config.show_traffic ? trafficMeter(n) : ""}</div>

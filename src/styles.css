@@ -2196,3 +2196,22 @@ button:disabled {
     margin: 0 -11px;
   }
 }
+/* One flag in the title; location and group form a single metadata line. */
+.node-identity .identity-text {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.node-identity .identity-text strong {
+  font-size: 13px;
+  flex: none;
+}
+.node-identity .country-label {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

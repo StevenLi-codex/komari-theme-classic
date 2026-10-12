@@ -45,8 +45,9 @@ test("console header, scoped summary and named cards form a clear hierarchy", as
   await expect(page.locator(".node-window")).toHaveCount(8);
   await expect(page.locator(".desktop-heading")).toContainText("节点管理器");
   await expect(page.locator(".overview-strip")).toContainText("8");
-  await expect(page.locator(".desktop-shell")).toHaveClass(/navigation-off/);
-  await page.locator('.view-square[data-action="toggle-sidebar"]').click();
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await expect(page.locator(".node-window .node-body img")).toHaveCount(0);
+  await expect(page.locator(".node-window .title-flag")).toHaveCount(8);
   await page.locator('[data-scope="group:生产环境"]').click();
   await expect(page.locator(".node-window")).toHaveCount(4);
   await expect(
@@ -88,7 +89,6 @@ test("dialog retains control focus and restores opener after close", async ({
   page,
 }) => {
   await page.goto("/demo.html");
-  await page.locator('.view-square[data-action="toggle-sidebar"]').click();
   await page.locator('[data-modal="settings"]').click();
   await page.locator("#pref-compact").check();
   await expect(page.locator("#pref-compact")).toBeFocused();
