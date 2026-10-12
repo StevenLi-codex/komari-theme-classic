@@ -6,3 +6,13 @@ theme.tar.gz
 theme.tar.gz.sha256
 *.zip
 __pycache__/
+AGENTS.md
+docs/ui-plan.md
+docs/release-v*.md
+scripts/legacy/
+scripts/browser_check.py
+scripts/capture_previews.py
+scripts/live_contract_check.py
+scripts/make_flags.py
+screenshot-*.png
+!screenshot-network-desktop.png
