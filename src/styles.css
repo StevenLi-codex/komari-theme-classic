@@ -457,10 +457,11 @@ button:disabled {
   display: none;
 }
 .overview-strip {
+  width: 92%;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
-  margin: 0 0 16px;
+  margin: 0 auto 16px;
   background: #f8f7f3;
   border: 1px solid #a09d95;
   box-shadow:
@@ -880,10 +881,14 @@ button:disabled {
   line-height: 1.6;
 }
 .card-facts {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
   margin-bottom: 12px;
+}
+.card-facts > .fact:not(.net-fact) {
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px;
 }
 .fact {
   display: grid;
@@ -906,6 +911,7 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .fact.net-fact {
+  grid-column: 1 / -1;
   grid-template-columns: 65px minmax(0, 1fr) minmax(0, 1fr);
   gap: 4px;
 }
@@ -1773,6 +1779,9 @@ button:disabled {
   }
 }
 @media (max-width: 540px) {
+  .overview-strip {
+    width: 100%;
+  }
   .desktop-shell {
     padding: 5px;
     gap: 6px;
