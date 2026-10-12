@@ -10,6 +10,8 @@ export function chartSvg(
     timestamps?: number[];
     step?: number;
     unit?: string;
+    maxValue?: number;
+    domain?: [number, number];
   } = {},
 ): string {
   const data = points.slice(-120);
@@ -18,8 +20,10 @@ export function chartSvg(
     times?.length === data.length &&
     times.every(valid) &&
     times.every((ts, i) => !i || ts >= times[i - 1]);
-  const start = timed ? times![0] : undefined;
-  const end = timed ? times!.at(-1) : undefined;
+  const start = options.domain?.[0] ?? (timed ? times![0] : undefined);
+  const end = options.domain?.[1] ?? (timed ? times!.at(-1) : undefined);
+  const maxValue =
+    valid(options.maxValue) && options.maxValue > 0 ? options.maxValue : 100;
   const hasData = data.some(valid);
   const segments: string[] = [];
   let partial: string[] = [];
@@ -42,7 +46,7 @@ export function chartSvg(
           : 0.5
         : i / Math.max(data.length - 1, 1);
       const x = 3 + fraction * (width - 6);
-      const y = height - 4 - (Math.min(100, v) / 100) * (height - 8);
+      const y = height - 4 - (Math.min(maxValue, v) / maxValue) * (height - 8);
       partial.push(
         `${partial.length ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`,
       );
@@ -73,7 +77,7 @@ export function chartSvg(
   const right = end !== undefined ? stamp(end) : "现在";
   const last = [...data].reverse().find(valid);
   return `<div class="graph ${hasData ? "" : "graph-empty"}"><div class="graph-caption"><span>${html(label)}</span><span>${hasData && last !== undefined ? `${last.toFixed(1)}${html(options.unit ?? "%")}` : "暂无历史"}</span></div>
-    <div class="graph-plot"><span class="graph-scale graph-scale-top">100</span><span class="graph-scale graph-scale-bottom">0</span><svg class="graph-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${html(label)}：${hasData ? "历史趋势" : "暂无历史数据"}"><g class="graph-grid">${gridX}${gridY}</g><g class="graph-line">${segments.map((d) => `<path d="${d}"/>${d.includes("L") ? "" : `<circle cx="${d.slice(1).split(",")[0]}" cy="${d.split(",")[1]}" r="2"/>`}`).join("")}</g></svg>${hasData ? "" : '<span class="graph-no-data">暂无历史数据</span>'}</div>
+    <div class="graph-plot"><span class="graph-scale graph-scale-top">${maxValue}</span><span class="graph-scale graph-scale-bottom">0</span><svg class="graph-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="${html(label)}：${hasData ? "历史趋势" : "暂无历史数据"}"><g class="graph-grid">${gridX}${gridY}</g><g class="graph-line">${segments.map((d) => `<path d="${d}"/>${d.includes("L") ? "" : `<circle cx="${d.slice(1).split(",")[0]}" cy="${d.split(",")[1]}" r="2"/>`}`).join("")}</g></svg>${hasData ? "" : '<span class="graph-no-data">暂无历史数据</span>'}</div>
     <div class="graph-time"><span>${html(left)}</span><span>${html(right)}</span></div></div>`;
 }
 export function chartFromHistory(

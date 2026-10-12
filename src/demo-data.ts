@@ -41,5 +41,20 @@ export const demo: NodeInfo[] = [
     public_remark: "演示节点",
     // Latency only exists via dedicated Hub probe data, not a guaranteed part of node metrics.
     _demoPing: Number(ping),
+    _demoProbes: {
+      probes: { "1": "上海电信", "2": "北京联通", "3": "广州移动" },
+      loss: { "1": 0, "2": 1.2, "3": 0.4 },
+      step: 3600,
+      ping: [1, 2, 3].flatMap((task_id) =>
+        Array.from({ length: 24 }, (_, j) => ({
+          task_id,
+          ts: 1780000000 + j * 3600,
+          latency:
+            j === 12 && task_id === 2
+              ? null
+              : Number(ping) + task_id * 8 + Math.sin(j * 0.7) * 12,
+        })),
+      ),
+    },
   }),
 ) as NodeInfo[];

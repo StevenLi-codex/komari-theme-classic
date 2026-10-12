@@ -41,6 +41,8 @@ try {
   cpSync(join(root, "screenshot-desktop.png"), join(root, "preview.png"));
   await page.locator(".node-window").first().press("Enter");
   await page.screenshot({ path: join(root, "screenshot-detail-desktop.png") });
+  await page.locator('[data-tab="network"]').click();
+  await page.screenshot({ path: join(root, "screenshot-network-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("http://127.0.0.1:4179/demo.html");
   await page.locator(".node-window").last().waitFor();

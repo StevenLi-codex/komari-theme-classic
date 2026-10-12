@@ -20,6 +20,18 @@ const node = {
   last_seen_ago: 5,
   expires_in: 20,
 };
+test("Hub probe names, timeout and aggregate loss render without invented carrier values", async ({
+  page,
+}) => {
+  await hub(page);
+  await page.goto("/#/node/1");
+  await page.locator('[data-tab="network"]').click();
+  await expect(page.locator(".probe-grid")).toContainText("真实电信");
+  await expect(page.locator(".probe-grid")).toContainText("真实联通");
+  await expect(page.locator(".probe-grid")).toContainText("12.5%");
+  await expect(page.locator(".probe-grid")).toContainText("超时 / 无响应");
+  await expect(page.locator(".traffic-block").first()).toContainText("N/A");
+});
 test("offline nodes retain memory and disk history from hardware totals", async ({
   page,
 }) => {
@@ -100,9 +112,13 @@ async function hub(
       value =
         url.searchParams.get("series") === "ping"
           ? {
+              probes: { "1": "真实电信", "2": "真实联通", "3": "真实移动" },
+              loss: { "2": 12.5 },
               ping: [
-                { ts: 100, latency: 40 },
-                { ts: 110, latency: 43 },
+                { task_id: 1, ts: 100, latency: 40 },
+                { task_id: 1, ts: 110, latency: 43 },
+                { task_id: 2, ts: 110, latency: null },
+                { task_id: 3, ts: 110, latency: 61 },
               ],
             }
           : {

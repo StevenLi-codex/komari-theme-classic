@@ -68,6 +68,12 @@ export interface NodeHistory {
   ping?: unknown[];
   step?: number;
 }
+export interface PingHistory {
+  ping: Array<{ ts: number; task_id?: number; latency: number | null }>;
+  probes: Record<string, string>;
+  loss?: Record<string, number>;
+  step?: number;
+}
 export interface Me {
   site_name?: string;
   name?: string;

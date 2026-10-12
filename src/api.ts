@@ -64,15 +64,20 @@ export async function getHistory(id: number, hours = 24): Promise<NodeHistory> {
 export async function getPing(
   id: number,
   hours = 6,
-): Promise<{
-  ping: Array<{ ts: number; task_id?: number; latency: number | null }>;
-}> {
-  const data = await request<{
-    ping: Array<{ ts: number; task_id?: number; latency: number | null }>;
-  }>(`/api/nodes/${id}/metrics?hours=${hours}&points=60&series=ping`);
+): Promise<import("./types.js").PingHistory> {
+  const data = await request<import("./types.js").PingHistory>(
+    `/api/nodes/${id}/metrics?hours=${hours}&points=120&series=ping`,
+  );
   if (!data || !Array.isArray(data.ping))
     throw new ApiError(200, "延迟数据格式错误");
   return {
+    probes: Object.fromEntries(
+      Object.entries(data.probes ?? {}).filter(
+        ([, name]) => typeof name === "string",
+      ),
+    ),
+    loss: data.loss,
+    step: data.step,
     ping: data.ping.filter(
       (p) => p && valid(p.ts) && (p.latency === null || valid(p.latency)),
     ),

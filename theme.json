@@ -2,7 +2,7 @@
   "name": "x86 Monitor",
   "short": "x86-monitor",
   "description": "Windows 95 与 Windows 2000 复古中文 VPS 卡片监控主题",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "x86 Monitor Contributors",
   "url": "",
   "config": [

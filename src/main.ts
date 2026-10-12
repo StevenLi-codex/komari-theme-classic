@@ -1,4 +1,10 @@
-import type { NodeInfo, NodeHistory, Me, ThemeConfig } from "./types.js";
+import type {
+  NodeInfo,
+  NodeHistory,
+  PingHistory,
+  Me,
+  ThemeConfig,
+} from "./types.js";
 import { NodeStream, getHistory, getPing, getMe } from "./api.js";
 import { loadConfig, defaults } from "./config.js";
 import {
@@ -32,6 +38,8 @@ const history = new Map<
     time: number;
     raw?: NodeHistory;
     error?: string;
+    probes?: PingHistory;
+    pingError?: string;
   }
 >();
 const inFlight = new Set<string>();
@@ -48,7 +56,7 @@ let me: Me = {};
 let scope = "all";
 let search = "";
 let view: "cards" | "compact" = "cards";
-let sidebarOpen = window.innerWidth > 700;
+let sidebarOpen = false;
 let preferredSidebar: boolean | undefined;
 try {
   const prefs = JSON.parse(
@@ -324,7 +332,7 @@ function nodeCard(n: NodeInfo) {
       <div class="node-identity"><div class="pc-picture">${flagImage(n.country, "hero-flag")}</div><div class="identity-text"><strong>${html(locationName(n.country))}</strong><div class="country-label" title="${html(n.group || "未分组")}">${html(n.group || "未分组")} · #${String(n.id).padStart(2, "0")}</div></div><div class="online-label ${status}"><span class="status-dot ${status}"></span>${stateZh(status)}</div></div>
       <div class="node-note ${note ? "state-note" : ""}" title="${html(note || n.public_remark || "")}">${html(note || n.public_remark || "实时资源监控")}</div>
       <div class="bevel-line"></div>
-      <div class="meters">${meter("处理器", cp)}${meter("内存", rm, valid(n.metrics?.mem_used) ? bytes(n.metrics!.mem_used) : undefined)}${meter("硬盘", dk)}</div>
+      <div class="meters">${meter("处理器", cp)}${meter("内存", rm, valid(n.metrics?.mem_used) ? bytes(n.metrics!.mem_used) : undefined)}${meter("硬盘", dk)}${config.show_traffic ? trafficMeter(n) : ""}</div>
       ${nodeChart(n)}
       <div class="card-facts"><div class="fact"><span>延迟</span><strong>${pingText(n)}</strong></div><div class="fact"><span>运行时间</span><strong>${duration(n.metrics?.uptime)}</strong></div>
       ${config.show_traffic ? `<div class="fact net-fact"><span>网络</span><strong class="net-down">↓ ${speed(n.metrics?.net_rx)}</strong><strong class="net-up">↑ ${speed(n.metrics?.net_tx)}</strong></div>` : ""}</div>
@@ -334,6 +342,111 @@ function nodeCard(n: NodeInfo) {
 }
 function detailField(label: string, value: unknown) {
   return `<div><dt>${html(label)}</dt><dd>${html(value)}</dd></div>`;
+}
+function trafficBlock(n: NodeInfo): string {
+  const limit = valid(n.traffic_limit) ? n.traffic_limit : null;
+  const used = valid(n.month_used) ? n.month_used : null;
+  const rx = n.total_rx ?? n.metrics?.total_rx;
+  const tx = n.total_tx ?? n.metrics?.total_tx;
+  const total = valid(rx) && valid(tx) ? rx + tx : null;
+  const remaining =
+    limit === 0
+      ? "不限量"
+      : limit === null || used === null
+        ? "N/A"
+        : bytes(Math.max(0, limit - used));
+  return `<div class="traffic-block"><div><span>周期额度</span><strong>${limit === 0 ? "不限量" : bytes(limit)}</strong></div><div><span>本期已用</span><strong>${bytes(used)}</strong></div><div><span>剩余流量</span><strong class="${limit && used !== null && used >= limit ? "expiry-warning" : "traffic-remaining"}">${remaining}</strong></div><div><span>累计总流量</span><strong>${bytes(total)}</strong></div></div>`;
+}
+function trafficMeter(n: NodeInfo): string {
+  const limit = valid(n.traffic_limit) ? n.traffic_limit : null;
+  const used = valid(n.month_used) ? n.month_used : null;
+  const percentage =
+    limit && used !== null ? Math.min(100, (used / limit) * 100) : null;
+  const value =
+    limit === 0
+      ? "不限量"
+      : limit === null || used === null
+        ? "N/A"
+        : `${bytes(Math.max(0, limit - used))} / ${bytes(limit)}`;
+  return `<div class="meter-row traffic-meter" title="本期已用 ${bytes(used)}；剩余 / 周期额度 ${value}"><span class="meter-label">流量</span><span class="meter-number">${fmtPercent(percentage)}</span><div class="meter-wrap"><span class="meter-fill ${percentage !== null && percentage > 90 ? "meter-danger" : ""}" style="width:${percentage ?? 0}%"></span><span class="traffic-value">${html(value)}</span></div></div>`;
+}
+function probePanel(n: NodeInfo): string {
+  const cached = cachedHistory(n.id);
+  const data = isDemo
+    ? (n as NodeInfo & { _demoProbes?: PingHistory })._demoProbes
+    : cached?.probes;
+  if (!isDemo && !cached)
+    return '<div class="detail-muted">正在加载三网探测……</div>';
+  if (cached?.pingError)
+    return `<div class="history-error" role="status">${html(cached.pingError)} <button class="classic-button" data-action="refresh">重试探测</button></div>`;
+  const ids = [...new Set(data?.ping.map((p) => p.task_id) ?? [])];
+  const names = ids.map(
+    (id) => data?.probes[String(id)] ?? `探测 ${id ?? "未命名"}`,
+  );
+  const missing = ["电信", "联通", "移动"].filter(
+    (carrier) => !names.some((name) => name.includes(carrier)),
+  );
+  const colors = ["#78d998", "#70baff", "#f0bd65", "#d3a8ff"];
+  const allPoints = data?.ping ?? [];
+  const peak =
+    Math.ceil(
+      Math.max(1, ...allPoints.map((p) => (valid(p.latency) ? p.latency : 0))) /
+        10,
+    ) * 10;
+  const domain: [number, number] = [
+    Math.min(...allPoints.map((p) => p.ts)),
+    Math.max(...allPoints.map((p) => p.ts)),
+  ];
+  const lines: string[] = [];
+  const panels = ids.map((id, i) => {
+    const points = data!.ping
+      .filter((p) => p.task_id === id)
+      .sort((a, b) => a.ts - b.ts);
+    const latest = points.at(-1)?.latency;
+    const loss = data!.loss?.[String(id)];
+    const lossText =
+      valid(loss) && loss <= 100
+        ? `${loss.toFixed(1)}%`
+        : points.length
+          ? "0.0%"
+          : "N/A";
+    const plot = chartSvg(
+      points.map((p) => p.latency),
+      "三网延迟（ms）",
+      720,
+      180,
+      {
+        hours: historyHours,
+        timestamps: points.map((p) => p.ts),
+        step: data!.step,
+        domain,
+        maxValue: peak,
+        unit: " ms",
+      },
+    );
+    lines.push(
+      `<g class="probe-series" style="stroke:${colors[i % colors.length]}">${plot.match(/<g class="graph-line">([\s\S]*?)<\/g>/)?.[1] ?? ""}</g>`,
+    );
+    return `<div class="probe-card"><div class="probe-heading"><strong><i style="background:${colors[i % colors.length]}"></i>${html(names[i])}</strong><span>${valid(latest) ? `${latest.toFixed(1)} ms` : "超时 / 无响应"}</span></div><p>查询范围丢包率 <strong>${lossText}</strong></p></div>`;
+  });
+  const plot = allPoints.length
+    ? chartSvg(
+        allPoints.map((p) => p.latency),
+        "三网延迟（ms）",
+        720,
+        180,
+        { hours: historyHours, maxValue: peak, unit: " ms", domain },
+      )
+        .replace(
+          /<g class="graph-line">[\s\S]*?<\/g>/,
+          `<g class="graph-line">${lines.join("")}</g>`,
+        )
+        .replace(
+          /<div class="graph-caption">[\s\S]*?<\/div>/,
+          '<div class="graph-caption"><span>三网延迟（ms）</span><span>同一时间轴 · 同一刻度</span></div>',
+        )
+    : "";
+  return `<div class="probe-grid"><div class="probe-legend">${panels.join("")}${missing.map((name) => `<div class="probe-card probe-unconfigured"><strong>${name}</strong><p>未配置探测</p></div>`).join("")}</div>${plot}</div><p class="detail-muted">探测为节点到运营商目标的 TCP 握手延迟；监控名称与结果由 Hub 提供。</p>`;
 }
 function detailPanel(title: string, content: string) {
   return `<fieldset class="win-panel"><legend>${html(title)}</legend>${content}</fieldset>`;
@@ -437,7 +550,7 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
         : points.map((p) =>
             valid(p[key]) ? Math.min(100, (p[key]! / peaks) * 100) : null,
           );
-    content = `${detailPanel("实时网络", grouped(["下载速度", speed(m?.net_rx)], ["上传速度", speed(m?.net_tx)], ["延迟", pingText(node)], ["本月已用流量（Hub）", bytes(validMonth)], ["本月接收", bytes(node.month_rx ?? m?.month_rx)], ["本月发送", bytes(node.month_tx ?? m?.month_tx)], ["累计接收", bytes(node.total_rx ?? m?.total_rx)], ["累计发送", bytes(node.total_tx ?? m?.total_tx)], ["流量限制", node.traffic_limit ? bytes(node.traffic_limit) : "未设置"]))}
+    content = `${detailPanel("三网线路 / 网络探测", probePanel(node))}${detailPanel("流量额度与用量", trafficBlock(node))}${detailPanel("实时网络", grouped(["下载速度", speed(m?.net_rx)], ["上传速度", speed(m?.net_tx)], ["延迟", pingText(node)], ["本月已用流量（Hub）", bytes(validMonth)], ["本月接收", bytes(node.month_rx ?? m?.month_rx)], ["本月发送", bytes(node.month_tx ?? m?.month_tx)], ["累计接收", bytes(node.total_rx ?? m?.total_rx)], ["累计发送", bytes(node.total_tx ?? m?.total_tx)], ["流量限制", node.traffic_limit ? bytes(node.traffic_limit) : "未设置"]))}
       <div class="detail-chart-grid">${detailPanel("下载趋势", detailGraph("下载速率（相对峰值）", series("net_rx")))}${detailPanel("上传趋势", detailGraph("上传速率（相对峰值）", series("net_tx")))}</div><p class="detail-muted">趋势图纵轴按当前查询范围内的峰值归一化；实时速率与累计流量以 Hub 数据为准。</p>`;
   } else {
     content = `${detailPanel("系统和硬件", grouped(["操作系统", node.os || "未提供"], ["主机名", node.hostname || "未提供"], ["内核", node.kernel || "未提供"], ["系统架构", node.arch || "未提供"], ["虚拟化", node.virt || "未提供"], ["CPU 型号", node.cpu_name || "未提供"], ["CPU 核心", node.cpu_cores ?? "未提供"], ["内存总量", bytes(m?.mem_total ?? node.mem_total)], ["硬盘总量", bytes(m?.disk_total ?? node.disk_total)], ["网络地址", node.ip || "未公开"], ["到期剩余天数", expDays(node) === null ? "未设置" : `${expDays(node)} 天`], ["公开备注", node.public_remark || "—"]))}`;
@@ -622,7 +735,7 @@ async function loadVisibleHistories() {
       try {
         const [hist, pings] = await Promise.allSettled([
           getHistory(id, hours),
-          getPing(id, Math.min(hours, 6)),
+          getPing(id, hours),
         ]);
         const points =
           hist.status === "fulfilled"
@@ -638,6 +751,11 @@ async function loadVisibleHistories() {
           history.set(key, {
             data: points,
             ping,
+            probes: pings.status === "fulfilled" ? pings.value : undefined,
+            pingError:
+              pings.status === "rejected"
+                ? (pings.reason as Error).message
+                : undefined,
             time: Date.now(),
             raw: hist.status === "fulfilled" ? hist.value : undefined,
             error:

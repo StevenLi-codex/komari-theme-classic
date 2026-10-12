@@ -1,4 +1,24 @@
 import { test, expect } from "@playwright/test";
+test("cards show quota remaining and total traffic and detail shows three carriers", async ({
+  page,
+}) => {
+  await page.goto("/demo.html");
+  const traffic = page.locator(".traffic-meter").first();
+  const bounds = await page.locator(".node-window").first().boundingBox();
+  expect(bounds!.height).toBeLessThan(470);
+  await expect(traffic).toContainText("流量");
+  await expect(traffic).toContainText("887.0 GB");
+  await expect(page.locator(".node-window .traffic-block")).toHaveCount(0);
+  await page.locator('.node-window [data-action="detail"]').first().click();
+  await page.locator('[data-tab="network"]').click();
+  await expect(page.locator(".traffic-block")).toContainText("562.0 GB");
+  await expect(page.locator(".probe-grid")).toContainText("上海电信");
+  await expect(page.locator(".probe-grid")).toContainText("北京联通");
+  await expect(page.locator(".probe-grid")).toContainText("广州移动");
+  await expect(page.locator(".probe-grid")).toContainText("1.2%");
+  await expect(page.locator(".probe-grid .graph-svg")).toHaveCount(1);
+  await expect(page.locator(".probe-grid .probe-series")).toHaveCount(3);
+});
 
 test("console header, scoped summary and named cards form a clear hierarchy", async ({
   page,
@@ -7,6 +27,8 @@ test("console header, scoped summary and named cards form a clear hierarchy", as
   await expect(page.locator(".node-window")).toHaveCount(8);
   await expect(page.locator(".desktop-heading")).toContainText("节点管理器");
   await expect(page.locator(".overview-strip")).toContainText("8");
+  await expect(page.locator(".desktop-shell")).toHaveClass(/navigation-off/);
+  await page.locator('.view-square[data-action="toggle-sidebar"]').click();
   await page.locator('[data-scope="group:生产环境"]').click();
   await expect(page.locator(".node-window")).toHaveCount(4);
   await expect(
@@ -48,6 +70,7 @@ test("dialog retains control focus and restores opener after close", async ({
   page,
 }) => {
   await page.goto("/demo.html");
+  await page.locator('.view-square[data-action="toggle-sidebar"]').click();
   await page.locator('[data-modal="settings"]').click();
   await page.locator("#pref-compact").check();
   await expect(page.locator("#pref-compact")).toBeFocused();
