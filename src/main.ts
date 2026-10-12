@@ -58,6 +58,14 @@ let search = "";
 let view: "cards" | "compact" = "cards";
 let sidebarOpen = window.innerWidth > 700;
 let preferredSidebar: boolean | undefined;
+const collapsedTrees = new Set<string>();
+function treeHeading(id: string, label: string, icon: string) {
+  return `<button type="button" id="tree-heading-${id}" class="tree-parent tree-folder-toggle" data-action="toggle-tree" data-tree="${id}" aria-expanded="${!collapsedTrees.has(id)}" aria-controls="tree-children-${id}"><span class="tree-toggle" aria-hidden="true">${collapsedTrees.has(id) ? "+" : "−"}</span>${icon}<span>${label}</span></button>`;
+}
+function navigationToggle() {
+  const expanded = sidebarOpen && (preferredSidebar ?? config.show_sidebar);
+  return `<button type="button" id="navigation-toggle" class="classic-button navigation-toggle" data-action="toggle-sidebar" aria-label="${expanded ? "收起" : "展开"}节点管理器" aria-expanded="${expanded}" title="${expanded ? "收起" : "展开"}节点管理器">${buttonIcon("computer")}</button>`;
+}
 try {
   const prefs = JSON.parse(
     localStorage.getItem("x86-monitor.preferences") || "{}",
@@ -235,13 +243,13 @@ function renderSidebar() {
   return `<aside class="sidebar ${!sidebarOpen ? "sidebar-closed" : ""}" aria-label="节点导航">
     <div class="sidebar-title classic-title"><span>${html(config.site_label || "节点管理器")}</span><button data-action="collapse-sidebar" aria-label="折叠导航" class="title-btn">${sidebarOpen ? "−" : "+"}</button></div>
     <div class="tree-scroll"><div class="tree-group">
-    <div class="tree-parent"><span class="tree-toggle">▣</span>${buttonIcon("computer")}<span>节点</span></div>
+    ${treeHeading("nodes", "节点", buttonIcon("computer"))}<div id="tree-children-nodes" ${collapsedTrees.has("nodes") ? "hidden" : ""}>
     ${navRow("全部节点", "all", buttonIcon("computer"), n.all)}
     ${navRow("在线", "online", '<span class="status-dot online"></span>', n.online, 2)}
     ${navRow("离线", "offline", '<span class="status-dot offline"></span>', n.offline, 2)}
     ${navRow("告警", "warning", '<span class="status-dot warning"></span>', n.warning, 2)}
     ${n.pending ? navRow("等待上报", "pending", '<span class="status-dot pending"></span>', n.pending, 2) : ""}
-    </div><div class="tree-group"><div class="tree-parent">${buttonIcon("folder")}<span>按地区</span></div>
+    </div></div><div class="tree-group">${treeHeading("countries", "按地区", buttonIcon("folder"))}<div id="tree-children-countries" ${collapsedTrees.has("countries") ? "hidden" : ""}>
     ${countries(a)
       .map((c) =>
         navRow(
@@ -252,7 +260,7 @@ function renderSidebar() {
         ),
       )
       .join("")}
-    </div><div class="tree-group"><div class="tree-parent">${buttonIcon("folder")}<span>分组</span></div>
+    </div></div><div class="tree-group">${treeHeading("groups", "分组", buttonIcon("folder"))}<div id="tree-children-groups" ${collapsedTrees.has("groups") ? "hidden" : ""}>
     ${groups(a)
       .map((g) =>
         navRow(
@@ -264,7 +272,7 @@ function renderSidebar() {
       )
       .join("")}
     ${a.some((n) => !n.group) ? navRow("未分组", "ungrouped", buttonIcon("folder"), a.filter((n) => !n.group).length) : ""}
-    </div><div class="tree-tools">
+    </div></div><div class="tree-tools">
     <button data-modal="network">${buttonIcon("globe")}<span>网络概览</span></button>
     <button data-modal="performance">${buttonIcon("report")}<span>性能概览</span></button>
     <button data-modal="alerts">${buttonIcon("warning")}<span>告警状态</span></button>
@@ -555,7 +563,7 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
   } else {
     content = `${detailPanel("系统和硬件", grouped(["操作系统", node.os || "未提供"], ["主机名", node.hostname || "未提供"], ["内核", node.kernel || "未提供"], ["系统架构", node.arch || "未提供"], ["虚拟化", node.virt || "未提供"], ["CPU 型号", node.cpu_name || "未提供"], ["CPU 核心", node.cpu_cores ?? "未提供"], ["内存总量", bytes(m?.mem_total ?? node.mem_total)], ["硬盘总量", bytes(m?.disk_total ?? node.disk_total)], ["网络地址", node.ip || "未公开"], ["到期剩余天数", expDays(node) === null ? "未设置" : `${expDays(node)} 天`], ["公开备注", node.public_remark || "—"]))}`;
   }
-  return `<main class="content node-page" id="main-content"><div class="detail-toolbar classic-title">${flagImage(node.country, "title-flag")}<span>${html(node.name)} · 属性</span><button class="title-btn" data-action="back" title="返回节点列表" aria-label="返回节点列表">×</button></div>
+  return `<main class="content node-page" id="main-content"><div class="detail-toolbar classic-title">${navigationToggle()}${flagImage(node.country, "title-flag")}<span>${html(node.name)} · 属性</span><button class="title-btn" data-action="back" title="返回节点列表" aria-label="返回节点列表">×</button></div>
     <div class="detail-inner"><div class="detail-navigation"><button class="classic-button" data-action="back">← 返回节点列表</button><span>节点属性 / ${html(node.name)}</span></div>
     <div class="detail-header">${flagImage(node.country, "detail-flag")}<div><h1>${html(node.name)}</h1><p><span class="status-dot ${st}"></span> ${stateZh(st)} · ${html(locationName(node.country))} · #${node.id}</p></div></div>
     ${error ? `<div class="error-banner" role="alert">${html(error)} <button data-action="refresh">重试</button></div>` : ""}
@@ -579,9 +587,9 @@ function renderMain() {
     );
   const result = visible(),
     a = nodes || [];
-  return `<main class="content" id="main-content"><div class="content-toolbar classic-title"><div class="toolbar-name">${buttonIcon("computer")} <span>${html(scopeText())}（${result.length} 台）</span></div>
+  return `<main class="content" id="main-content"><div class="content-toolbar classic-title"><div class="toolbar-name">${navigationToggle()} <span>${html(scopeText())}（${result.length} 台）</span></div>
     <div class="toolbar-right"><label class="toolbar-search" title="搜索节点"><span aria-hidden="true">⌕</span><input id="search-box" aria-label="搜索节点" placeholder="搜索名称、地区、分组" value="${html(search)}" /></label><label class="view-label" for="view-select">视图</label><select id="view-select" aria-label="卡片视图"><option value="cards" ${view === "cards" ? "selected" : ""}>卡片视图</option><option value="compact" ${view === "compact" ? "selected" : ""}>紧凑卡片</option></select>
-    <button class="classic-button view-square" data-action="toggle-sidebar" title="切换导航" aria-label="切换导航">▦</button><button class="classic-button mobile-menu" data-action="toggle-sidebar" aria-label="菜单">☰</button></div></div>
+    </div></div>
     ${isDemo ? '<div class="demo-banner" role="note"><strong>演示环境</strong><span>当前页面使用示例数据</span><a href="/">查看实时站点 ↗</a></div>' : ""}
     ${config.notice ? `<div class="notice" role="note"><strong>站点公告</strong> ${html(config.notice)}</div>` : ""}
     ${error ? `<div class="error-banner" role="alert">${html(error)} <button data-action="refresh">重试</button></div>` : ""}
@@ -885,6 +893,12 @@ root.addEventListener("click", (event) => {
         savePreferences();
       } else sidebarOpen = !sidebarOpen;
       break;
+    case "toggle-tree": {
+      const tree = action.dataset.tree!;
+      if (collapsedTrees.has(tree)) collapsedTrees.delete(tree);
+      else collapsedTrees.add(tree);
+      break;
+    }
     case "refresh":
       historyEpoch++;
       history.clear();

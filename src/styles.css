@@ -2215,3 +2215,125 @@ button:disabled {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* Classic beveled controls share the same chrome as window buttons. */
+.toolbar-right select,
+#history-range {
+  appearance: none;
+  background-color: var(--face);
+  border: 1px solid;
+  border-color: #fff #64615c #64615c #fff;
+  box-shadow:
+    inset -1px -1px #929088,
+    inset 1px 1px #eeece6;
+  padding: 3px 28px 3px 8px;
+  color: #20242b;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='24'%3E%3Cpath d='M1 2H21V22H1Z' fill='%23d4d0c8' stroke='%23929088'/%3E%3Cpath d='M2 21V3H20' fill='none' stroke='white'/%3E%3Cpath d='M7 10H15L11 14Z' fill='%2320242b'/%3E%3C/svg%3E");
+  background-position: right 2px center;
+  background-repeat: no-repeat;
+  font-size: 13px;
+  cursor: pointer;
+}
+.toolbar-right select option,
+#history-range option {
+  background: var(--face);
+  color: #20242b;
+}
+.navigation-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 3px;
+  flex: none;
+}
+.navigation-toggle .pixel-pc {
+  margin: 0;
+}
+.tree-folder-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  padding: 6px 2px;
+}
+.tree-folder-toggle:hover {
+  background: #e6e3db;
+}
+.tree-folder-toggle .tree-toggle {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #7c7c75;
+  background: #fff;
+  font: 11px monospace;
+  flex: none;
+}
+/* Keep three columns, but make the text legible instead of tiny console labels. */
+.node-window .node-title {
+  font-size: 19px;
+}
+.node-window .identity-text strong {
+  font-size: 18px;
+}
+.node-window .country-label,
+.node-window .node-note {
+  font-size: 15px;
+}
+.node-window .meter-label,
+.node-window .meter-number {
+  font-size: 18px;
+}
+.node-window .fact > span:first-child,
+.node-window .fact strong {
+  font-size: 16px;
+}
+.node-window .online-label,
+.node-window .node-footer {
+  font-size: 14px;
+}
+.node-window .graph-caption {
+  font-size: 14px;
+}
+.node-window .graph-time,
+.node-window .graph-scale,
+.node-window .traffic-value {
+  font-size: 12px;
+}
+.node-window .traffic-value {
+  line-height: 12px;
+}
+.node-window .traffic-meter .meter-wrap {
+  height: 16px;
+}
+@media (max-width: 700px) {
+  .node-window .node-title {
+    font-size: 15px;
+  }
+  .node-window .identity-text strong,
+  .node-window .meter-label,
+  .node-window .meter-number {
+    font-size: 14px;
+  }
+  .node-window .country-label,
+  .node-window .node-note,
+  .node-window .fact > span:first-child,
+  .node-window .fact strong {
+    font-size: 12px;
+  }
+  .node-window .online-label,
+  .node-window .node-footer {
+    font-size: 11px;
+  }
+  .node-window .graph-caption {
+    font-size: 12px;
+  }
+  .node-window .graph-time,
+  .node-window .graph-scale,
+  .node-window .traffic-value {
+    font-size: 10px;
+  }
+}

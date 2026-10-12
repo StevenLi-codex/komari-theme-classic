@@ -1,4 +1,43 @@
 import { test, expect } from "@playwright/test";
+test("left icon controls navigation and expanded folders can collapse independently", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/demo.html");
+  await expect(page.locator(".view-square,.mobile-menu")).toHaveCount(0);
+  await expect(page.locator("#navigation-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  for (const id of ["nodes", "countries", "groups"]) {
+    const heading = page.locator(`#tree-heading-${id}`);
+    await expect(heading).toHaveAttribute("aria-expanded", "true");
+    await heading.click();
+    await expect(page.locator(`#tree-children-${id}`)).toBeHidden();
+    await expect(heading).toBeFocused();
+    await heading.press("Enter");
+    await expect(page.locator(`#tree-children-${id}`)).toBeVisible();
+  }
+  const fontSize = await page
+    .locator(".meter-label")
+    .first()
+    .evaluate((label) => {
+      const card = label.closest(".node-window")! as HTMLElement;
+      return (
+        (parseFloat(getComputedStyle(label).fontSize) *
+          card.getBoundingClientRect().width) /
+        card.offsetWidth
+      );
+    });
+  expect(fontSize).toBeGreaterThanOrEqual(12);
+  await page.locator("#navigation-toggle").click();
+  await expect(page.locator(".sidebar")).toBeHidden();
+  await page.locator("#navigation-toggle").click();
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await page.locator('.node-window [data-action="detail"]').first().click();
+  await page.locator("#navigation-toggle").click();
+  await expect(page.locator(".sidebar")).toBeHidden();
+});
 test("desktop displays three cards per row with the same proportions across widths", async ({
   page,
 }) => {

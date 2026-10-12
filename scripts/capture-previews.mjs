@@ -39,6 +39,9 @@ try {
     await page.waitForLoadState("networkidle");
   await page.screenshot({ path: join(root, "screenshot-desktop.png") });
   cpSync(join(root, "screenshot-desktop.png"), join(root, "preview.png"));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.screenshot({ path: join(root, "screenshot-desktop-1280.png") });
+  await page.setViewportSize({ width: 1920, height: 1200 });
   await page.locator(".node-window").first().press("Enter");
   await page.screenshot({ path: join(root, "screenshot-detail-desktop.png") });
   await page.locator('[data-tab="network"]').click();
