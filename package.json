@@ -1,9 +1,9 @@
 {
-  "name": "monitor-theme-classic",
-  "version": "1.0.4",
+  "name": "komari-theme-classic",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Classic Windows management console theme for Monitor Hub",
+  "description": "Windows 95/2000 Classic console theme for Komari",
   "scripts": {
     "build": "node scripts/build.mjs",
     "dev": "node scripts/dev.mjs",

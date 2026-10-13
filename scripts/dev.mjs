@@ -14,7 +14,7 @@ const server = spawn(process.execPath, [join(root, "scripts/serve.mjs")], {
   windowsHide: true,
 });
 let timer;
-for (const path of ["src", "public", "theme.json", "index.html"])
+for (const path of ["src", "public", "komari-theme.json", "index.html"])
   watch(
     join(root, path),
     { recursive: path === "src" || path === "public" },

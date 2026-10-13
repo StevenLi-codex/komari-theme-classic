@@ -1,74 +1,49 @@
-# Monitor Classic · 经典监控台
+# Komari Classic · 经典监控台
 
-面向 [Monitor](https://github.com/monitor-probe/monitor) Hub 的独立中文主题，采用 Windows 95/2000 控制台风格：蓝色标题栏、立体边框、资源进度条、性能曲线与可折叠导航树。
+原生 **Komari 1.3.0** 主题，保留 Windows 95/2000 蓝色标题栏、立体边框、卡片、导航树、资源进度条和 SVG 曲线。
 
-[下载 v1.0.4](https://github.com/ayingQAQ/monitor-theme-classic/releases/tag/v1.0.4) · [官方主题规范](https://monitor-document.pages.dev/dev/theme) · [主题收录要求](https://github.com/monitor-probe/themes#收录你的主题)
+**原设计与上游作者：[ayingQAQ / monitor-theme-classic](https://github.com/ayingQAQ/monitor-theme-classic)**（基于上游 1.0.4，commit `988df2e`）。Komari 协议移植维护：StevenLi-codex。此项目不是 Komari 官方主题。原 MIT 版权及第三方资源声明保留于 `LICENSE`、`THIRD_PARTY.md`、`THIRD_PARTY_NOTICES.txt`。
 
-![Monitor Classic 桌面预览，1920×1200](preview.png)
+## 安装与回滚
 
-## 安装
+1. 从 [Releases](https://github.com/StevenLi-codex/komari-theme-classic/releases) 下载 `theme.zip` 和 `theme.zip.sha256`。如果尚无 Release，请按下方构建。
+2. 核对：`sha256sum -c theme.zip.sha256`。
+3. 登录 **Komari 管理后台 → 主题管理 → 上传主题**，上传 `theme.zip`，然后选择 **Komari Classic**。不要上传源码 ZIP，不要解压后重新加目录。
+4. 在主题配置中设置标题（留空跟随站点名称）、卡片列数 2–5、侧栏、历史曲线、网络速率、纯文本公告。
+5. 刷新首页，核对节点、在线状态、详情、历史和管理后台链接。
 
-在最新版 Monitor Hub 后台「主题」→「从 GitHub 安装」填写：
+**回滚：**切换回默认主题或之前主题即可；该主题不修改节点、历史数据库或 agent。切换前记录原主题名称与配置，保留原安装包。不要删除正在使用的主题。
 
-```text
-https://github.com/ayingQAQ/monitor-theme-classic
+## 功能与边界
+
+- UUID 节点详情、国家/分组筛选、搜索、卡片/紧凑视图、隐藏/恢复、最小化、资源告警、到期告警、性能/网络/硬件详情、键盘操作、移动端、设备本地偏好。
+- 原生 `/api/rpc2` HTTP 与 WebSocket JSON-RPC；5 秒主动刷新，关联请求 ID，断线重连、HTTP 回退、页面隐藏暂停、保留旧数据显示连接失败与刷新时间。无核心功能第三方请求。
+- `/api/me` 读取登录状态，`/api/public` 读取站点标题、保留时长（小时）与 `theme_settings`；后台仍是 Komari 内置 `/admin`。
+- 只从 `common:getNodes` 白名单建立节点，不把多余状态变成节点；不显示私有 remark、token/IP。
+- Ping `-1` 是丢包/曲线断点；丢包率使用服务器任务的完整查询窗口统计，不用降采样图点推算。探测类型由 Komari 配置，不固定为 TCP。
+- **月流量与剩余额度 N/A**：本端口只获得累计计数，未确认可用的公开月结算 API；绝不把 `net_total_up/down` 当月用量。价格 `-1` 是未知；billing_cycle 单位为天。
+- 测试/demo 使用明确标记的合成数据，不是生产数据；demo 不进入安装包。
+- 当前兼容性目标及验证范围是 **Komari 1.3.0**；没有宣称其他版本兼容。
+
+## 开发、验证与打包
+
+需要 Node.js 24+、Python 3.11+。
+
+```sh
+npm ci
+npm run check
+npm test
+npx playwright install --with-deps chromium
+npm run test:ui
+npm run pack
+sha256sum -c theme.zip.sha256
 ```
 
-安装后选择 **Monitor Classic**。也可从 Release 下载 `theme.tar.gz` 上传安装。不要上传 GitHub 自动生成的源码 ZIP。
+输出 `dist/`、`theme.zip`、`theme.zip.sha256`。ZIP 根目录包含 `komari-theme.json`、`dist/index.html` 及版权声明；打包可复现，JS/CSS 带内容哈希。
 
-页面入口为 `/`，节点详情为 `/#/node/{id}`，采用 hash 路由，不需要额外放行服务器路径；`/admin` 由 Hub 后台处理。
-
-- 主题名称：`Monitor Classic`；短名：`monitor-classic`；版本：`1.0.4`。
-- 后续更新从清单 `url` 指向的仓库读取最新正式 Release。
-- 开发阶段的 `x86-monitor` 使用不同短名，请安装新的 `monitor-classic`，不会自动覆盖旧主题。
-- 登录、节点管理和探测任务由 Hub 后台提供。
-
-附件 `theme.tar.gz.sha256` 用于校验：
-
-```powershell
-Get-FileHash .\theme.tar.gz -Algorithm SHA256
-Get-Content .\theme.tar.gz.sha256
+```sh
+KOMARI_SERVER=http://127.0.0.1:25777 npm run dev
+# 本地 demo: http://127.0.0.1:4173/demo.html
 ```
 
-```bash
-sha256sum -c theme.tar.gz.sha256
-```
-
-## 功能
-
-- 桌面默认三列、卡片等比缩放。节点管理器默认展开，节点、地区和分组文件夹可独立收起。
-- 在线状态、地区、分组筛选，名称搜索、紧凑视图、卡片最小化与恢复。
-- CPU、内存、硬盘、流量进度、剩余/额度、延迟、运行时间、实时网速。
-- 独立节点详情：概览、性能监视器、网络流量、硬件信息。
-- 性能监视器中 CPU、内存和硬盘历史各占一整行。
-- 三网延迟使用同一时间轴和毫秒刻度，显示最新延迟及查询范围丢包率。运营商按 Hub 的探测名称识别；需要配置对应电信、联通、移动探测，未配置时明确提示。
-- 文本/gzip WebSocket 串行解压、断线重连、轮询兜底，页面返回前台时恢复同步。
-- 实时更新保留滚动容器和卡片，历史查询最多四个独立并发请求；优先加载当前可见卡片，资源与延迟结果各自返回后立即显示。限流时自动短暂重试，刷新时保留已有曲线。
-- 离线、等待首次上报、指标异常、加载、无历史、请求失败分别显示；缺失数据用 `N/A`。
-- 剩余流量用额度减去 Hub 的计费用量 `month_used`，累计总流量取 Hub 累计接收与发送统计；支持不限量与超额状态。
-- 历史范围跟随 `history_days`，时间戳定位曲线，缺失区间保留断点。节点名称、备注、公告和探测名称安全转义。
-
-### 网络详情
-
-![三网延迟及流量详情，1920×1200](screenshot-network-desktop.png)
-
-截图使用明确标记的演示数据，不对应真实服务器。电脑预览为 **1920×1200（16:10）**，保持原始比例。
-
-## 发布与收录
-
-公开仓库根目录提供 MIT `LICENSE`；清单 `url` 指向本仓库；版本 `1.0.4` 对应 `v1.0.4` tag。正式 Release 附件为 `theme.tar.gz` 与 `theme.tar.gz.sha256`，包内含 `preview.png`。
-
-按 [主题列表 README](https://github.com/monitor-probe/themes#收录你的主题) 申请收录时，只在 `themes.txt` 末尾增加本仓库地址；名称、简介、作者、版本和截图从最新正式 Release 读取。官方 PR 检查会将包安装进最新版 Hub。
-
-CI 执行类型、格式、单元、浏览器和安装包检查；`Verify published release` 工作流使用官方主题列表检查器下载本仓库正式 Release，验证真实 Hub 安装。模拟接口回归不能替代真实 Hub 验收。
-
-## 结构与许可证
-
-`src/api.ts` 处理协议和连接，`format.ts` 处理状态/数值，`chart.ts` 绘制 SVG，`dom.ts` 保留节点并更新变化内容，`main.ts` 组织页面，`config.ts` 读取清单。演示入口与生产入口单独构建。运行时不依赖外部 UI 库、字体或图标服务。
-
-对照官方主题指南与架构协议的检查记录见 [协议与接口核对](docs/protocol-audit.md)。
-
-采用 [MIT](LICENSE) 许可证，第三方说明见 [THIRD_PARTY.md](THIRD_PARTY.md) 与 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt)。不包含微软专有图形素材，不属于微软官方产品。
-
-
-
+开发代理转发同源 API/WebSocket；不要将本地开发服务器暴露公网。预览图片沿用上游视觉资产。详细协议映射见 [协议核对](docs/protocol-audit.md)。

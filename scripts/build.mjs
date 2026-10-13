@@ -15,7 +15,9 @@ const dist = join(root, "dist");
 if (relative(root, dist) !== "dist")
   throw new Error("Unexpected output directory");
 const assets = join(dist, "assets");
-const manifest = JSON.parse(readFileSync(join(root, "theme.json"), "utf8"));
+const manifest = JSON.parse(
+  readFileSync(join(root, "komari-theme.json"), "utf8"),
+);
 const hash = (data) =>
   createHash("sha256").update(data).digest("hex").slice(0, 16);
 execFileSync(
@@ -43,7 +45,13 @@ writeFileSync(join(assets, cssName), css);
 const index = readFileSync(join(root, "index.html"), "utf8")
   .replace("/assets/main.js", `/assets/${jsName}`)
   .replace("/assets/styles.css", `/assets/${cssName}`)
-  .replaceAll("__THEME_VERSION__", manifest.version);
+  .replaceAll("__THEME_VERSION__", manifest.version)
+  .replaceAll('="/assets/', '="/themes/komari-classic/dist/assets/')
+  .replaceAll('="/favicon.svg', '="/themes/komari-classic/dist/favicon.svg')
+  .replaceAll(
+    '="/apple-touch-icon.png',
+    '="/themes/komari-classic/dist/apple-touch-icon.png',
+  );
 writeFileSync(join(dist, "index.html"), index);
 cpSync(join(root, "public"), dist, { recursive: true });
 const demo = await build({
@@ -54,8 +62,12 @@ const demo = await build({
   target: "es2022",
   minify: true,
   charset: "utf8",
-  external: ["/assets/*"],
-  define: { __MAIN_ASSET__: JSON.stringify(`/assets/${jsName}`) },
+  external: ["/themes/komari-classic/dist/assets/*"],
+  define: {
+    __MAIN_ASSET__: JSON.stringify(
+      `/themes/komari-classic/dist/assets/${jsName}`,
+    ),
+  },
 });
 const demoName = `demo.${hash(demo.outputFiles[0].contents)}.js`;
 writeFileSync(join(assets, demoName), demo.outputFiles[0].contents);
@@ -63,4 +75,4 @@ writeFileSync(
   join(dist, "demo.html"),
   index.replace(`/assets/${jsName}`, `/assets/${demoName}`),
 );
-console.log(`Built Monitor Classic ${manifest.version}: ${jsName}, ${cssName}`);
+console.log(`Built Komari Classic ${manifest.version}: ${jsName}, ${cssName}`);

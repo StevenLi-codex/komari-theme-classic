@@ -1,29 +1,38 @@
-name: Verify published release
-on: workflow_dispatch
+name: Native Komari ZIP release
+on:
+  push:
+    tags: ['komari-v*']
+  workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
-  verify:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Download official Hub and check published archive
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: npm ci
+      - run: npm run check && npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+      - run: npm run pack
+      - name: Validate tag and publish native ZIP
+        if: startsWith(github.ref, 'refs/tags/komari-v')
         env:
           GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
-          THEME_REPOSITORY: ${{ github.repository }}
-        shell: bash
         run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/monitor-classic-hub"
-          cd "$RUNNER_TEMP/monitor-classic-hub"
-          gh release download --repo monitor-probe/monitor --pattern monitor-hub-x86_64-unknown-linux-musl --pattern sha256sums.txt
-          sha256sum --ignore-missing -c sha256sums.txt
-          chmod +x monitor-hub-x86_64-unknown-linux-musl
-          git clone --depth 1 https://github.com/monitor-probe/themes.git catalog
-          printf 'https://github.com/%s\n' "$THEME_REPOSITORY" > catalog/themes.txt
-          cd catalog
-          node scripts/build.mjs "$RUNNER_TEMP/monitor-classic-hub/monitor-hub-x86_64-unknown-linux-musl"
+          node -e 'const m=JSON.parse(require("fs").readFileSync("komari-theme.json")); if(process.env.GITHUB_REF_NAME !== "komari-v"+m.version) process.exit(1)'
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Komari Classic $GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" theme.zip theme.zip.sha256 --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komari-classic-package
+          path: |
+            theme.zip
+            theme.zip.sha256

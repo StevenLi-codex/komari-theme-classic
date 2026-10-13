@@ -1,7 +1,9 @@
 import type { ThemeConfig } from "./types.js";
-import manifest from "../theme.json";
+import manifest from "../komari-theme.json";
 const defaults = Object.fromEntries(
-  manifest.config.filter((f) => "key" in f).map((f) => [f.key, f.default]),
+  manifest.configuration.data
+    .filter((f) => "key" in f)
+    .map((f) => [f.key, f.default]),
 ) as unknown as ThemeConfig;
 const pick = (saved: Record<string, unknown>): ThemeConfig => ({
   site_label:
@@ -34,10 +36,12 @@ const pick = (saved: Record<string, unknown>): ThemeConfig => ({
 });
 export async function loadConfig(): Promise<ThemeConfig> {
   try {
-    const r = await fetch(`/api/themes/${manifest.short}/config`, {
+    const r = await fetch(`/api/public`, {
       signal: AbortSignal.timeout(8000),
     });
-    const data = r.ok ? await r.json() : null;
+    const envelope = r.ok ? await r.json() : null;
+    let data = envelope?.data?.theme_settings;
+    if (typeof data === "string") data = JSON.parse(data);
     return data && typeof data === "object" && !Array.isArray(data)
       ? pick(data)
       : defaults;

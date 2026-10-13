@@ -4,7 +4,9 @@ export default defineConfig({
   timeout: 30000,
   fullyParallel: true,
   use: { baseURL: "http://127.0.0.1:4178", trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  projects: [
+    { name: "chromium", use: { browserName: "chromium", channel: "chromium" } },
+  ],
   webServer: {
     command: "npm run build && node scripts/serve.mjs",
     url: "http://127.0.0.1:4178",

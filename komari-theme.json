@@ -1,0 +1,52 @@
+{
+  "name": "Komari Classic",
+  "short": "komari-classic",
+  "description": "Windows 95 / 2000 复古中文监控主题，原设计 ayingQAQ，原生 Komari 移植",
+  "version": "1.0.0",
+  "author": "ayingQAQ（原设计）；StevenLi-codex（Komari 移植）",
+  "url": "https://github.com/StevenLi-codex/komari-theme-classic",
+  "preview": "preview.png",
+  "configuration": {
+    "type": "managed",
+    "name": "经典桌面",
+    "data": [
+      { "type": "title", "name": "经典桌面" },
+      {
+        "key": "site_label",
+        "type": "string",
+        "name": "主标题（留空跟随站点名称）",
+        "default": "节点管理器"
+      },
+      {
+        "key": "columns",
+        "type": "number",
+        "name": "宽屏卡片列数（2–5）",
+        "default": 3
+      },
+      {
+        "key": "show_sidebar",
+        "type": "switch",
+        "name": "显示左侧导航树",
+        "default": true
+      },
+      {
+        "key": "show_chart",
+        "type": "switch",
+        "name": "显示 CPU 历史曲线",
+        "default": true
+      },
+      {
+        "key": "show_traffic",
+        "type": "switch",
+        "name": "显示流量速率",
+        "default": true
+      },
+      {
+        "key": "notice",
+        "type": "textbox",
+        "name": "公告（纯文本）",
+        "default": ""
+      }
+    ]
+  }
+}

@@ -6,6 +6,7 @@ import type {
   ThemeConfig,
 } from "./types.js";
 import { NodeStream, getHistory, getPing, getMe } from "./api.js";
+import { parseNodeId, nodeHash, datasetId } from "./routes.js";
 import { loadConfig, defaults } from "./config.js";
 import {
   age,
@@ -26,9 +27,8 @@ import { chartSvg, chartFromHistory, demoChart } from "./chart.js";
 import { updateMarkup } from "./dom.js";
 const root = document.getElementById("app")!;
 const buildVersion =
-  document.querySelector<HTMLMetaElement>(
-    'meta[name="monitor-classic-version"]',
-  )?.content || "开发版";
+  document.querySelector<HTMLMetaElement>('meta[name="komari-classic-version"]')
+    ?.content || "开发版";
 const demo = (window as Window & { __X86_DEMO_NODES__?: NodeInfo[] })
   .__X86_DEMO_NODES__;
 const isDemo = Array.isArray(demo);
@@ -46,12 +46,12 @@ const history = new Map<
   }
 >();
 const inFlight = new Set<string>();
-// Hub shares four slots across both series; each slot now tracks one request.
+// Komari shares four slots across both series; each slot now tracks one request.
 const historyRequestLimit = 4;
 let historyHours = 24;
 let historyEpoch = 0;
-const historyKey = (id: number) => `${id}:${historyHours}`;
-const cachedHistory = (id: number) => history.get(historyKey(id));
+const historyKey = (id: string | number) => `${id}:${historyHours}`;
+const cachedHistory = (id: string | number) => history.get(historyKey(id));
 let nodes: NodeInfo[] | null = null;
 let error: string | null = null;
 let refreshed: number | null = null;
@@ -73,7 +73,7 @@ function navigationToggle() {
 }
 try {
   const prefs = JSON.parse(
-    localStorage.getItem("monitor-classic.preferences") || "{}",
+    localStorage.getItem("komari-classic.preferences") || "{}",
   );
   if (prefs?.view === "compact") view = "compact";
   if (typeof prefs?.sidebar === "boolean") preferredSidebar = prefs.sidebar;
@@ -81,19 +81,19 @@ try {
 function savePreferences() {
   try {
     localStorage.setItem(
-      "monitor-classic.preferences",
+      "komari-classic.preferences",
       JSON.stringify({ view, sidebar: preferredSidebar }),
     );
   } catch {}
 }
-const minimized = new Set<number>();
-const hidden = new Set<number>();
+const minimized = new Set<string | number>();
+const hidden = new Set<string | number>();
 let modal: { type: "network" | "performance" | "alerts" | "settings" } | null =
   null;
 let detailTab: "overview" | "performance" | "network" | "hardware" = "overview";
 let previousRoute = "";
 let listScroll = 0;
-let lastOpenedId: number | null = null;
+let lastOpenedId: string | number | null = null;
 let modalOpener = "";
 let retryTimer: ReturnType<typeof setInterval> | null = null;
 const client = new NodeStream((next, err, last, conn) => {
@@ -126,7 +126,7 @@ const bundledFlags = new Set(
 function flagImage(code?: string, klass = "node-flag"): string {
   const c = typeof code === "string" ? code.toLowerCase() : "";
   if (bundledFlags.has(c))
-    return `<img class="${klass}" src="/flags/${c}.svg" alt="${html(locationName(c))}国旗" loading="lazy" decoding="async" />`;
+    return `<img class="${klass}" src="/themes/komari-classic/dist/flags/${c}.svg" alt="${html(locationName(c))}国旗" loading="lazy" decoding="async" />`;
   return `<span class="${klass} flag-fallback" title="${html(locationName(code))}">${html(c.toUpperCase() || "??")}</span>`;
 }
 const stateZh = (status: string) =>
@@ -139,11 +139,10 @@ const stateZh = (status: string) =>
         : status === "invalid"
           ? "指标异常"
           : "离线";
-function detailId(): number | null {
-  const m = location.hash.match(/^#\/node\/(\d+)$/);
-  return m && Number.isSafeInteger(Number(m[1])) ? Number(m[1]) : null;
+function detailId(): string | number | null {
+  return parseNodeId(location.hash);
 }
-function openDetail(id: number) {
+function openDetail(id: string | number) {
   detailTab = "overview";
   lastOpenedId = id;
   if (window.innerWidth <= 700) sidebarOpen = false;
@@ -151,7 +150,7 @@ function openDetail(id: number) {
     window.history.pushState(
       { x86FromList: detailId() === null },
       "",
-      `${location.pathname}${location.search}#/node/${id}`,
+      `${location.pathname}${location.search}${nodeHash(id)}`,
     );
   render();
   focusRoute();
@@ -306,7 +305,9 @@ function nodeChart(n: NodeInfo): string {
     nodeState(n) !== "invalid" &&
     nodeState(n) !== "pending"
   )
-    return chartSvg(demoChart(n.id), label, 280, 90, { hours: historyHours });
+    return chartSvg(demoChart(Number(n.id)), label, 280, 90, {
+      hours: historyHours,
+    });
   if (!isDemo && !cached?.raw && !cached?.error)
     return `<div class="history-placeholder">${inFlight.has(`${historyKey(n.id)}:metrics`) ? "正在加载历史…" : "等待历史数据"}</div>`;
   if (cached?.error)
@@ -461,7 +462,7 @@ function probePanel(n: NodeInfo): string {
           '<div class="graph-caption"><span>三网延迟（ms）</span><span>同一时间轴 · 同一刻度</span></div>',
         )
     : "";
-  return `<div class="probe-grid"><div class="probe-legend">${panels.join("")}${missing.map((name) => `<div class="probe-card probe-unconfigured"><strong>${name}</strong><p>未配置探测</p></div>`).join("")}</div>${plot}</div><p class="detail-muted">探测为节点到运营商目标的 TCP 握手延迟；监控名称与结果由 Hub 提供。</p>`;
+  return `<div class="probe-grid"><div class="probe-legend">${panels.join("")}${missing.map((name) => `<div class="probe-card probe-unconfigured"><strong>${name}</strong><p>未配置探测</p></div>`).join("")}</div>${plot}</div><p class="detail-muted">探测类型、名称与结果由 Komari 提供（ICMP / TCP / HTTP 等）；丢包率为完整查询窗口统计。</p>`;
 }
 function detailPanel(title: string, content: string) {
   return `<fieldset class="win-panel"><legend>${html(title)}</legend>${content}</fieldset>`;
@@ -496,7 +497,7 @@ function detailHistory(node: NodeInfo) {
       node.online &&
         nodeState(node) !== "pending" &&
         nodeState(node) !== "invalid"
-        ? demoChart(node.id)
+        ? demoChart(Number(node.id))
         : [],
     );
   if (!cached?.raw && !cached?.error)
@@ -505,9 +506,12 @@ function detailHistory(node: NodeInfo) {
     return `<div class="history-error" role="status">${html(cached.error)} <button class="classic-button" data-action="refresh">重试历史</button></div>`;
   return detailGraph("CPU 使用率", cached.data);
 }
-function renderNodePage(node: NodeInfo | undefined, id: number): string {
+function renderNodePage(
+  node: NodeInfo | undefined,
+  id: string | number,
+): string {
   if (!node)
-    return `<main class="content node-page" id="main-content" tabindex="-1"><div class="detail-toolbar classic-title">节点详情</div><div class="detail-inner"><div class="empty-state"><p>${!nodes ? (error ? html(error) : "正在读取节点详情……") : `未找到编号为 ${id} 的节点`}</p><small>${!nodes ? "正在连接 Monitor Hub" : "节点可能已删除或无权查看"}</small><button class="classic-button" data-action="${!nodes && error ? "refresh" : "back"}">${!nodes && error ? "重试连接" : "← 返回节点列表"}</button></div></div></main>`;
+    return `<main class="content node-page" id="main-content" tabindex="-1"><div class="detail-toolbar classic-title">节点详情</div><div class="detail-inner"><div class="empty-state"><p>${!nodes ? (error ? html(error) : "正在读取节点详情……") : `未找到编号为 ${id} 的节点`}</p><small>${!nodes ? "正在连接 Komari" : "节点可能已删除或无权查看"}</small><button class="classic-button" data-action="${!nodes && error ? "refresh" : "back"}">${!nodes && error ? "重试连接" : "← 返回节点列表"}</button></div></div></main>`;
   const m = node.metrics,
     st = nodeState(node),
     validMonth = valid(node.month_used) ? node.month_used : null;
@@ -549,7 +553,7 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
           ? Math.min(100, (pt.disk_used! / diskTotal) * 100)
           : null,
       ) ?? [];
-    content = `${detailPanel("实时资源", meterGrid)}<div class="detail-chart-grid performance-chart-grid">${detailPanel("CPU 历史", detailHistory(node))}${detailPanel("内存历史", detailGraph("内存使用率", isDemo ? demoChart(node.id + 3) : memData))}${detailPanel("硬盘历史", detailGraph("硬盘使用率", isDemo ? demoChart(node.id + 6) : diskData))}</div>`;
+    content = `${detailPanel("实时资源", meterGrid)}<div class="detail-chart-grid performance-chart-grid">${detailPanel("CPU 历史", detailHistory(node))}${detailPanel("内存历史", detailGraph("内存使用率", isDemo ? demoChart(Number(node.id) + 3) : memData))}${detailPanel("硬盘历史", detailGraph("硬盘使用率", isDemo ? demoChart(Number(node.id) + 6) : diskData))}</div>`;
   } else if (detailTab === "network") {
     const c = cachedHistory(node.id),
       points = c?.raw?.metrics ?? [];
@@ -562,12 +566,12 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
     );
     const series = (key: "net_rx" | "net_tx") =>
       isDemo
-        ? demoChart(node.id + (key === "net_rx" ? 1 : 5))
+        ? demoChart(Number(node.id) + (key === "net_rx" ? 1 : 5))
         : points.map((p) =>
             valid(p[key]) ? Math.min(100, (p[key]! / peaks) * 100) : null,
           );
-    content = `${detailPanel("三网线路 / 网络探测", probePanel(node))}${detailPanel("流量额度与用量", trafficBlock(node))}${detailPanel("实时网络", grouped(["下载速度", speed(m?.net_rx)], ["上传速度", speed(m?.net_tx)], ["延迟", pingText(node)], ["本月已用流量（Hub）", bytes(validMonth)], ["本月接收", bytes(node.month_rx ?? m?.month_rx)], ["本月发送", bytes(node.month_tx ?? m?.month_tx)], ["累计接收", bytes(node.total_rx ?? m?.total_rx)], ["累计发送", bytes(node.total_tx ?? m?.total_tx)], ["流量限制", node.traffic_limit ? bytes(node.traffic_limit) : "未设置"]))}
-      <div class="detail-chart-grid">${detailPanel("下载趋势", detailGraph("下载速率（相对峰值）", series("net_rx")))}${detailPanel("上传趋势", detailGraph("上传速率（相对峰值）", series("net_tx")))}</div><p class="detail-muted">趋势图纵轴按当前查询范围内的峰值归一化；实时速率与累计流量以 Hub 数据为准。</p>`;
+    content = `${detailPanel("三网线路 / 网络探测", probePanel(node))}${detailPanel("流量额度与用量", trafficBlock(node))}${detailPanel("实时网络", grouped(["下载速度", speed(m?.net_rx)], ["上传速度", speed(m?.net_tx)], ["延迟", pingText(node)], ["本月已用流量（Komari）", bytes(validMonth)], ["本月接收", bytes(node.month_rx ?? m?.month_rx)], ["本月发送", bytes(node.month_tx ?? m?.month_tx)], ["累计接收", bytes(node.total_rx ?? m?.total_rx)], ["累计发送", bytes(node.total_tx ?? m?.total_tx)], ["流量限制", node.traffic_limit ? bytes(node.traffic_limit) : "未设置"]))}
+      <div class="detail-chart-grid">${detailPanel("下载趋势", detailGraph("下载速率（相对峰值）", series("net_rx")))}${detailPanel("上传趋势", detailGraph("上传速率（相对峰值）", series("net_tx")))}</div><p class="detail-muted">趋势图纵轴按当前查询范围内的峰值归一化；实时速率与累计流量以 Komari 数据为准。</p>`;
   } else {
     content = `${detailPanel("系统和硬件", grouped(["操作系统", node.os || "未提供"], ["主机名", node.hostname || "未提供"], ["内核", node.kernel || "未提供"], ["系统架构", node.arch || "未提供"], ["虚拟化", node.virt || "未提供"], ["CPU 型号", node.cpu_name || "未提供"], ["CPU 核心", node.cpu_cores ?? "未提供"], ["内存总量", bytes(m?.mem_total ?? node.mem_total)], ["硬盘总量", bytes(m?.disk_total ?? node.disk_total)], ["网络地址", node.ip || "未公开"], ["到期剩余天数", expDays(node) === null ? "未设置" : `${expDays(node)} 天`], ["公开备注", node.public_remark || "—"]))}`;
   }
@@ -631,7 +635,7 @@ function renderOverview(list: NodeInfo[]) {
 }
 function renderStatus() {
   const n = counts();
-  return `<footer class="statusbar"><span class="status-cell status-ready">${isDemo ? "演示模式" : connection === "Live" ? "实时连接" : connection === "Polling" ? "轮询中" : connection === "Offline" ? "连接中断" : connection === "Reconnecting" ? "重新连接中" : connection} · v${buildVersion}</span><span class="status-cell spacer"></span><span class="status-cell">节点总数：${n.all}</span><span class="status-cell">在线：${n.online}</span><span class="status-cell">离线：${n.offline}</span><span class="status-cell">告警：${n.warning}</span><span class="status-cell status-refresh"><span class="status-dot ${connection === "Live" || isDemo ? "online" : "offline"}"></span> 最近刷新：${refreshed ? new Date(refreshed).toLocaleTimeString("zh-CN") : "—"}</span></footer>`;
+  return `<footer class="statusbar"><span class="status-cell status-ready">${isDemo ? "演示模式" : connection === "Live" ? "实时连接" : connection === "Polling" ? "轮询中" : connection === "Offline" ? "连接中断" : connection === "Reconnecting" ? "重新连接中" : connection} · v${buildVersion} · 原设计 <a href="https://github.com/ayingQAQ/monitor-theme-classic" target="_blank" rel="noopener noreferrer">ayingQAQ</a> · 移植 StevenLi-codex</span><span class="status-cell spacer"></span><span class="status-cell">节点总数：${n.all}</span><span class="status-cell">在线：${n.online}</span><span class="status-cell">离线：${n.offline}</span><span class="status-cell">告警：${n.warning}</span><span class="status-cell status-refresh"><span class="status-dot ${connection === "Live" || isDemo ? "online" : "offline"}"></span> 最近刷新：${refreshed ? new Date(refreshed).toLocaleTimeString("zh-CN") : "—"}</span></footer>`;
 }
 function renderModal() {
   if (!modal) return "";
@@ -640,7 +644,7 @@ function renderModal() {
   if (modal.type === "network") {
     title = "网络概览";
     const list = nodes || [];
-    content = `<p>按 Monitor Hub 提供的国家或地区信息汇总</p><div class="modal-list">${
+    content = `<p>按 Komari 提供的国家或地区信息汇总</p><div class="modal-list">${
       countries(list)
         .map(
           (c) =>
@@ -664,7 +668,7 @@ function renderModal() {
     content = `<p>当前离线、高负载（大于 90%）以及三天内到期的节点</p><div class="modal-list">${alert.map((n) => `<div><span class="status-dot ${nodeState(n)}"></span> ${html(n.name)}<span>${stateZh(nodeState(n))}</span></div>`).join("") || "<p>当前没有告警或离线节点。</p>"}</div>`;
   } else if (modal.type === "settings") {
     title = "显示设置";
-    content = `<p>调整这台设备的显示偏好。站点设置可在 Hub 主题管理中修改。</p><div class="setting-row"><label><input id="pref-sidebar" type="checkbox" ${(preferredSidebar ?? config.show_sidebar) ? "checked" : ""} /> 显示导航树</label></div><div class="setting-row"><label><input id="pref-compact" type="checkbox" ${view === "compact" ? "checked" : ""} /> 紧凑卡片视图</label></div><button class="classic-button" data-action="reset-preferences">恢复默认显示</button><button class="classic-button" data-action="open-admin">打开管理后台 ↗</button>`;
+    content = `<p>调整这台设备的显示偏好。站点设置可在 Komari 主题管理中修改。</p><div class="setting-row"><label><input id="pref-sidebar" type="checkbox" ${(preferredSidebar ?? config.show_sidebar) ? "checked" : ""} /> 显示导航树</label></div><div class="setting-row"><label><input id="pref-compact" type="checkbox" ${view === "compact" ? "checked" : ""} /> 紧凑卡片视图</label></div><button class="classic-button" data-action="reset-preferences">恢复默认显示</button><button class="classic-button" data-action="open-admin">打开管理后台 ↗</button>`;
   }
   return `<div class="modal-backdrop" data-action="close-modal"><section class="dialog-window" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"><div class="classic-title dialog-title"><span id="modal-title">${html(title)}</span><button class="title-btn" data-action="close-modal" aria-label="关闭弹窗">×</button></div><div class="dialog-body">${content}<div class="dialog-footer"><button class="classic-button" data-action="close-modal">确定</button></div></div></section></div>`;
 }
@@ -708,7 +712,7 @@ function render() {
   previousRoute = routeKey;
   updateMarkup(
     root,
-    `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/favicon.svg" alt="" /><div><span class="brand-kicker">MONITOR CLASSIC / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
+    `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/themes/komari-classic/dist/favicon.svg" alt="" /><div><span class="brand-kicker">KOMARI CLASSIC / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
    ${renderSidebar()}<div class="main-column" data-key="main-column">${renderMain()}</div></div>${renderStatus()}</div>${renderModal()}`,
   );
   const tree = root.querySelector(".tree-scroll");
@@ -744,20 +748,20 @@ function historyJobs() {
       : config.show_chart
         ? visible()
         : [];
-  const viewport = new Set<number>();
+  const viewport = new Set<string | number>();
   const main = root.querySelector(".content");
   if (detail === null && main) {
     const bounds = main.getBoundingClientRect();
     for (const card of main.querySelectorAll<HTMLElement>(".node-window")) {
       const rect = card.getBoundingClientRect();
       if (rect.bottom > bounds.top && rect.top < bounds.bottom)
-        viewport.add(Number(card.dataset.node));
+        viewport.add(datasetId(card.dataset.node));
     }
   }
   // The first snapshot may precede DOM creation; prioritize its first row.
   if (!viewport.size) for (const n of list.slice(0, 3)) viewport.add(n.id);
   const jobs: Array<{
-    id: number;
+    id: string | number;
     series: "metrics" | "ping";
     priority: number;
   }> = [];
@@ -938,7 +942,7 @@ root.addEventListener("click", (event) => {
     }
     const card = target.closest<HTMLElement>("[data-node]");
     if (card) {
-      openDetail(Number(card.dataset.node));
+      openDetail(datasetId(card.dataset.node));
       void loadVisibleHistories();
     }
     return;
@@ -949,7 +953,7 @@ root.addEventListener("click", (event) => {
     target !== action
   )
     return;
-  const id = Number(action.dataset.id);
+  const id = datasetId(action.dataset.id);
   switch (action.dataset.action) {
     case "min":
       minimized.has(id) ? minimized.delete(id) : minimized.add(id);
@@ -1047,7 +1051,7 @@ document.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;
     if (t.matches(".node-window")) {
       e.preventDefault();
-      openDetail(Number(t.dataset.node));
+      openDetail(datasetId(t.dataset.node));
       void loadVisibleHistories();
     }
   }
@@ -1075,7 +1079,7 @@ async function boot() {
   ]);
   if (conf.status === "fulfilled") config = conf.value;
   if (profile.status === "fulfilled") me = profile.value;
-  document.title = `${config.site_label || me.site_name || "节点管理器"} · Monitor Classic`;
+  document.title = `${config.site_label || me.site_name || "节点管理器"} · Komari Classic`;
   if (!historyWindows().includes(historyHours))
     historyHours = Math.min(24, Math.max(...historyWindows()));
   if (config.show_chart || detailId() !== null) void loadVisibleHistories();

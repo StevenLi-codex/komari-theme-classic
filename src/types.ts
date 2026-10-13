@@ -20,7 +20,7 @@ export interface Metrics {
   procs?: number;
 }
 export interface NodeInfo {
-  id: number;
+  id: string | number;
   name: string;
   sort?: number;
   public?: boolean;

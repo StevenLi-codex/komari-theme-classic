@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
-const manifest = JSON.parse(readFileSync(resolve(root, "theme.json"), "utf8"));
+const manifest = JSON.parse(
+  readFileSync(resolve(root, "komari-theme.json"), "utf8"),
+);
 const doc = readFileSync(resolve(root, "dist/index.html"), "utf8");
 const findAsset = (kind, ext) => {
   const match = doc.match(
@@ -15,7 +17,7 @@ const findAsset = (kind, ext) => {
 const jsFile = findAsset("main", "js");
 const cssFile = findAsset("styles", "css");
 
-test("Theme manifest meets required Hub fields", () => {
+test("Theme manifest meets required Komari fields", () => {
   for (const key of [
     "name",
     "short",
@@ -28,8 +30,9 @@ test("Theme manifest meets required Hub fields", () => {
   assert.match(manifest.short, /^[A-Za-z0-9_-]+$/);
   assert.notEqual(manifest.name, "");
   assert.equal(
-    new Set(manifest.config.filter((f) => f.key).map((f) => f.key)).size,
-    manifest.config.filter((f) => f.key).length,
+    new Set(manifest.configuration.data.filter((f) => f.key).map((f) => f.key))
+      .size,
+    manifest.configuration.data.filter((f) => f.key).length,
   );
 });
 test("Standalone static application exists and is within size budget", () => {
@@ -52,10 +55,10 @@ test("Standalone static application exists and is within size budget", () => {
 });
 test("API WebSocket, history and safe rendering are implemented", () => {
   const script = readFileSync(resolve(root, jsFile), "utf8");
-  assert.match(script, /\/api\/ws/);
-  assert.match(script, /DecompressionStream/);
-  assert.match(script, /series=metrics/);
-  assert.match(script, /series=ping/);
+  assert.match(script, /\/api\/rpc2/);
+  assert.match(script, /common:getNodesLatestStatus/);
+  assert.match(script, /common:getRecords/);
+  assert.match(script, /maxCount/);
   assert.match(script, /服务器返回的数据格式错误/);
   assert.match(script, /last_seen_ago/);
   assert.match(script, /重新连接中|重新连接/);
@@ -96,7 +99,7 @@ test("Simplified Chinese and local SVG flags included", () => {
     );
 });
 
-test("Hub cache safety: hashed JS and CSS match SHA-256 content", async () => {
+test("Komari cache safety: hashed JS and CSS match SHA-256 content", async () => {
   const { createHash } = await import("node:crypto");
   for (const p of [jsFile, cssFile]) {
     const file = readFileSync(resolve(root, p));
