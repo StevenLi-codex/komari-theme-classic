@@ -1,4 +1,28 @@
 import { test, expect } from "@playwright/test";
+test("performance history uses three full-width rows", async ({ page }) => {
+  await page.goto("/demo.html#/node/1");
+  await page.getByRole("button", { name: "性能监视器", exact: true }).click();
+  const panels = page.locator(".performance-chart-grid > fieldset");
+  await expect(panels).toHaveCount(3);
+  const boxes = await panels.evaluateAll((elements) =>
+    elements.map((el) => {
+      const { x, y, width, height } = el.getBoundingClientRect();
+      return { x, y, width, height };
+    }),
+  );
+  expect(boxes[1].y).toBeGreaterThanOrEqual(boxes[0].y + boxes[0].height);
+  expect(boxes[2].y).toBeGreaterThanOrEqual(boxes[1].y + boxes[1].height);
+  expect(boxes.map((box) => box.x)).toEqual([
+    boxes[0].x,
+    boxes[0].x,
+    boxes[0].x,
+  ]);
+  expect(boxes.map((box) => box.width)).toEqual([
+    boxes[0].width,
+    boxes[0].width,
+    boxes[0].width,
+  ]);
+});
 test("left icon controls navigation and expanded folders can collapse independently", async ({
   page,
 }) => {

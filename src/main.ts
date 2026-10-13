@@ -42,11 +42,12 @@ const history = new Map<
     error?: string;
     probes?: PingHistory;
     pingError?: string;
+    pingTime?: number;
   }
 >();
 const inFlight = new Set<string>();
-// Each node issues two requests; Hub shares four slots across both series.
-const historyNodeLimit = 2;
+// Hub shares four slots across both series; each slot now tracks one request.
+const historyRequestLimit = 4;
 let historyHours = 24;
 let historyEpoch = 0;
 const historyKey = (id: number) => `${id}:${historyHours}`;
@@ -306,8 +307,8 @@ function nodeChart(n: NodeInfo): string {
     nodeState(n) !== "pending"
   )
     return chartSvg(demoChart(n.id), label, 280, 90, { hours: historyHours });
-  if (!isDemo && !cached)
-    return `<div class="history-placeholder">${inFlight.has(historyKey(n.id)) ? "正在加载历史…" : "等待历史数据"}</div>`;
+  if (!isDemo && !cached?.raw && !cached?.error)
+    return `<div class="history-placeholder">${inFlight.has(`${historyKey(n.id)}:metrics`) ? "正在加载历史…" : "等待历史数据"}</div>`;
   if (cached?.error)
     return `<div class="history-placeholder history-error" title="${html(cached.error)}">历史暂不可用 · 点击查看详情</div>`;
   return chartSvg(cached?.data ?? [], label, 280, 90, {
@@ -387,7 +388,7 @@ function probePanel(n: NodeInfo): string {
   const data = isDemo
     ? (n as NodeInfo & { _demoProbes?: PingHistory })._demoProbes
     : cached?.probes;
-  if (!isDemo && !cached)
+  if (!isDemo && !cached?.probes && !cached?.pingError)
     return '<div class="detail-muted">正在加载三网探测……</div>';
   if (cached?.pingError)
     return `<div class="history-error" role="status">${html(cached.pingError)} <button class="classic-button" data-action="refresh">重试探测</button></div>`;
@@ -480,7 +481,7 @@ function historyWindows() {
 }
 function detailGraph(label: string, points: Array<number | null>) {
   const cached = cachedHistory(detailId() ?? 0);
-  if (!isDemo && !cached)
+  if (!isDemo && !cached?.raw && !cached?.error)
     return '<div class="detail-muted">正在获取历史数据……</div>';
   if (!isDemo && cached?.error)
     return `<div class="history-error" role="status">${html(cached.error)} <button class="classic-button" data-action="refresh">重试历史</button></div>`;
@@ -498,7 +499,8 @@ function detailHistory(node: NodeInfo) {
         ? demoChart(node.id)
         : [],
     );
-  if (!cached) return '<div class="detail-muted">正在获取历史数据……</div>';
+  if (!cached?.raw && !cached?.error)
+    return '<div class="detail-muted">正在获取历史数据……</div>';
   if (cached.error)
     return `<div class="history-error" role="status">${html(cached.error)} <button class="classic-button" data-action="refresh">重试历史</button></div>`;
   return detailGraph("CPU 使用率", cached.data);
@@ -547,7 +549,7 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
           ? Math.min(100, (pt.disk_used! / diskTotal) * 100)
           : null,
       ) ?? [];
-    content = `${detailPanel("实时资源", meterGrid)}<div class="detail-chart-grid">${detailPanel("CPU 历史", detailHistory(node))}${detailPanel("内存历史", detailGraph("内存使用率", isDemo ? demoChart(node.id + 3) : memData))}${detailPanel("硬盘历史", detailGraph("硬盘使用率", isDemo ? demoChart(node.id + 6) : diskData))}</div>`;
+    content = `${detailPanel("实时资源", meterGrid)}<div class="detail-chart-grid performance-chart-grid">${detailPanel("CPU 历史", detailHistory(node))}${detailPanel("内存历史", detailGraph("内存使用率", isDemo ? demoChart(node.id + 3) : memData))}${detailPanel("硬盘历史", detailGraph("硬盘使用率", isDemo ? demoChart(node.id + 6) : diskData))}</div>`;
   } else if (detailTab === "network") {
     const c = cachedHistory(node.id),
       points = c?.raw?.metrics ?? [];
@@ -734,82 +736,142 @@ function render() {
       ) as HTMLElement | null
     )?.focus();
 }
+function historyJobs() {
+  const detail = detailId();
+  const list =
+    detail !== null
+      ? (nodes ?? []).filter((n) => n.id === detail)
+      : config.show_chart
+        ? visible()
+        : [];
+  const viewport = new Set<number>();
+  const main = root.querySelector(".content");
+  if (detail === null && main) {
+    const bounds = main.getBoundingClientRect();
+    for (const card of main.querySelectorAll<HTMLElement>(".node-window")) {
+      const rect = card.getBoundingClientRect();
+      if (rect.bottom > bounds.top && rect.top < bounds.bottom)
+        viewport.add(Number(card.dataset.node));
+    }
+  }
+  // The first snapshot may precede DOM creation; prioritize its first row.
+  if (!viewport.size) for (const n of list.slice(0, 3)) viewport.add(n.id);
+  const jobs: Array<{
+    id: number;
+    series: "metrics" | "ping";
+    priority: number;
+  }> = [];
+  for (const n of list) {
+    const cached = cachedHistory(n.id);
+    for (const series of ["metrics", "ping"] as const) {
+      const key = `${historyKey(n.id)}:${series}`;
+      const time = series === "metrics" ? cached?.time : cached?.pingTime;
+      const failed = series === "metrics" ? cached?.error : cached?.pingError;
+      if (
+        !inFlight.has(key) &&
+        (!time || Date.now() - time >= (failed ? 30_000 : 60_000))
+      )
+        jobs.push({
+          id: n.id,
+          series,
+          priority: (viewport.has(n.id) ? 0 : 2) + (series === "ping" ? 1 : 0),
+        });
+    }
+  }
+  return jobs.sort((a, b) => a.priority - b.priority);
+}
 async function loadVisibleHistories() {
   if (isDemo || !nodes || document.hidden) return;
-  const detail = detailId();
-  const ids =
-    detail !== null
-      ? nodes.filter((n) => n.id === detail).map((n) => n.id)
-      : config.show_chart
-        ? visible().map((n) => n.id)
-        : [];
-  for (const id of ids) {
-    if (inFlight.size >= historyNodeLimit) return;
+  if (inFlight.size >= historyRequestLimit) return;
+  const jobs = historyJobs();
+  const pendingMetrics = jobs.some((job) => job.series === "metrics");
+  const pendingPing = jobs.some((job) => job.series === "ping");
+  for (const { id, series } of jobs) {
+    if (inFlight.size >= historyRequestLimit) return;
+    const activeSeries = Array.from(inFlight).filter((key) =>
+      key.endsWith(`:${series}`),
+    ).length;
+    // A slow probe must not occupy every slot while resource charts are queued,
+    // and slow resource queries must leave a slot for latency.
+    if (series === "ping" && pendingMetrics && activeSeries >= 1) continue;
+    if (series === "metrics" && pendingPing && activeSeries >= 3) continue;
     const key = historyKey(id),
-      epoch = historyEpoch,
+      requestKey = `${key}:${series}`;
+    const epoch = historyEpoch,
       hours = historyHours;
-    const cached = history.get(key);
-    if (
-      inFlight.has(key) ||
-      (cached && Date.now() - cached.time < (cached.error ? 30_000 : 60_000))
-    )
-      continue;
-    inFlight.add(key);
+    inFlight.add(requestKey);
     void (async () => {
       try {
-        const [hist, pings] = await Promise.allSettled([
-          getHistory(id, hours),
-          getPing(id, hours),
-        ]);
-        const points =
-          hist.status === "fulfilled"
-            ? chartFromHistory(hist.value.metrics)
-            : [];
-        const latestPingTs =
-          pings.status === "fulfilled"
-            ? Math.max(...pings.value.ping.map((p) => p.ts))
-            : -1;
-        const ping =
-          pings.status === "fulfilled"
-            ? (pings.value.ping
-                .filter((p) => p.ts === latestPingTs)
-                .find((p) => valid(p.latency))?.latency ?? null)
-            : null;
-        if (epoch === historyEpoch && !document.hidden) {
-          history.set(key, {
-            data: points,
-            ping,
-            probes: pings.status === "fulfilled" ? pings.value : undefined,
-            pingError:
-              pings.status === "rejected"
-                ? (pings.reason as Error).message
-                : undefined,
-            time: Date.now(),
-            raw: hist.status === "fulfilled" ? hist.value : undefined,
-            error:
-              hist.status === "rejected"
-                ? (hist.reason as Error).message
-                : undefined,
-          });
-          scheduleRender();
+        if (series === "metrics") {
+          const raw = await getHistory(id, hours);
+          if (epoch === historyEpoch && !document.hidden)
+            history.set(key, {
+              ...history.get(key),
+              data: chartFromHistory(raw.metrics),
+              ping: history.get(key)?.ping ?? null,
+              raw,
+              error: undefined,
+              time: Date.now(),
+            });
+        } else {
+          const probes = await getPing(id, hours);
+          const latestTs = Math.max(...probes.ping.map((p) => p.ts));
+          const ping =
+            probes.ping
+              .filter((p) => p.ts === latestTs)
+              .find((p) => valid(p.latency))?.latency ?? null;
+          if (epoch === historyEpoch && !document.hidden)
+            history.set(key, {
+              data: [],
+              time: 0,
+              ...history.get(key),
+              ping,
+              probes,
+              pingError: undefined,
+              pingTime: Date.now(),
+            });
         }
-      } catch (e) {
+      } catch (error) {
         if (epoch === historyEpoch && !document.hidden) {
-          history.set(key, {
-            data: [],
-            ping: null,
-            time: Date.now(),
-            error: (e as Error).message,
-          });
-          scheduleRender();
+          const cached = { data: [], ping: null, time: 0, ...history.get(key) };
+          history.set(
+            key,
+            series === "metrics"
+              ? { ...cached, error: (error as Error).message, time: Date.now() }
+              : {
+                  ...cached,
+                  ping: null,
+                  pingError: (error as Error).message,
+                  pingTime: Date.now(),
+                },
+          );
         }
       } finally {
-        inFlight.delete(key);
-        if (inFlight.size < historyNodeLimit) void loadVisibleHistories();
+        inFlight.delete(requestKey);
+        if (epoch === historyEpoch && !document.hidden) scheduleRender();
+        void loadVisibleHistories();
       }
     })();
   }
 }
+// Scroll events do not bubble; capture them and coalesce priority updates.
+let historyScrollFrame: number | undefined;
+root.addEventListener(
+  "scroll",
+  (event) => {
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.matches(".content") ||
+      historyScrollFrame !== undefined
+    )
+      return;
+    historyScrollFrame = requestAnimationFrame(() => {
+      historyScrollFrame = undefined;
+      void loadVisibleHistories();
+    });
+  },
+  true,
+);
 root.addEventListener("input", (event) => {
   const t = event.target as HTMLInputElement;
   if (t.id === "search-box") {
@@ -921,7 +983,10 @@ root.addEventListener("click", (event) => {
     }
     case "refresh":
       historyEpoch++;
-      for (const cached of history.values()) cached.time = 0;
+      for (const cached of history.values()) {
+        cached.time = 0;
+        cached.pingTime = 0;
+      }
       client.refresh();
       void loadVisibleHistories();
       break;

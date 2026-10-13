@@ -141,10 +141,16 @@ async function hub(
     historyDelay?: number;
     limitedHistory?: boolean;
     transientHistory?: boolean;
+    holdSeries?: "metrics" | "ping";
   } = {},
 ) {
   let socket: WebSocketRoute | undefined;
   const historyRequests: string[] = [];
+  const requestedNodes: number[] = [];
+  let releaseHeld!: () => void;
+  const held = new Promise<void>((resolve) => {
+    releaseHeld = resolve;
+  });
   let activeHistory = 0,
     peakHistory = 0,
     rejectedHistory = 0;
@@ -160,6 +166,8 @@ async function hub(
       value = { nodes: options.nodes ?? [node] };
     } else if (url.pathname.endsWith("/metrics")) {
       historyRequests.push(url.search);
+      requestedNodes.push(Number(url.pathname.split("/")[3]));
+      if (url.searchParams.get("series") === options.holdSeries) await held;
       activeHistory++;
       peakHistory = Math.max(peakHistory, activeHistory);
       const busy =
@@ -233,10 +241,81 @@ async function hub(
   return {
     socket: () => socket,
     historyRequests,
+    requestedNodes,
+    releaseHeld,
     peak: () => peakHistory,
     rejected: () => rejectedHistory,
   };
 }
+
+test("visible CPU charts do not wait for slow ping history", async ({
+  page,
+}) => {
+  const nodes = Array.from({ length: 19 }, (_, i) => ({
+    ...node,
+    id: i + 1,
+    name: `Node ${i + 1}`,
+  }));
+  const backend = await hub(page, { nodes, holdSeries: "ping" });
+  try {
+    await page.goto("/");
+    await expect(page.locator(".node-window .graph")).toHaveCount(19, {
+      timeout: 2500,
+    });
+    await expect(page.locator(".node-window").first()).toContainText("N/A");
+  } finally {
+    backend.releaseHeld();
+  }
+});
+
+test("latency renders without waiting for resource history", async ({
+  page,
+}) => {
+  const backend = await hub(page, { holdSeries: "metrics" });
+  try {
+    await page.goto("/");
+    await expect(page.locator(".node-window")).toContainText("43 ms", {
+      timeout: 2000,
+    });
+    await expect(page.locator(".history-placeholder")).toHaveCount(1);
+  } finally {
+    backend.releaseHeld();
+  }
+});
+
+test("refresh prioritizes currently visible cards after scrolling", async ({
+  page,
+}) => {
+  const nodes = Array.from({ length: 19 }, (_, i) => ({
+    ...node,
+    id: i + 1,
+    name: `Node ${i + 1}`,
+  }));
+  const backend = await hub(page, { nodes, historyDelay: 50 });
+  await page.goto("/");
+  await expect(page.locator(".node-window .graph")).toHaveCount(19);
+  await expect.poll(() => backend.historyRequests.length).toBe(38);
+  const ids = await page.locator(".content").evaluate((el) => {
+    el.scrollTop = 900;
+    const bounds = el.getBoundingClientRect();
+    return Array.from(el.querySelectorAll<HTMLElement>(".node-window"))
+      .filter((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.bottom > bounds.top && rect.top < bounds.bottom;
+      })
+      .map((card) => Number(card.dataset.node));
+  });
+  const before = backend.requestedNodes.length;
+  await page.getByRole("button", { name: "↻ 刷新", exact: true }).click();
+  await expect
+    .poll(() => backend.requestedNodes.length)
+    .toBeGreaterThanOrEqual(before + 4);
+  expect(
+    backend.requestedNodes
+      .slice(before, before + 4)
+      .every((id) => ids.includes(id)),
+  ).toBe(true);
+});
 
 test("realtime frames keep scroll containers and cards connected while scrolling", async ({
   page,
