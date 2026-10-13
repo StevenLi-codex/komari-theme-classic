@@ -952,7 +952,8 @@ button:disabled {
 .compact-grid .node-identity {
   min-height: 38px;
 }
-.compact-grid .graph {
+.compact-grid .graph,
+.compact-grid .history-placeholder {
   height: 86px;
   margin: 8px 0;
 }
@@ -1877,7 +1878,8 @@ button:disabled {
     font-size: 11px;
     margin: 10px 0;
   }
-  .graph {
+  .graph,
+  .history-placeholder {
     height: 128px;
   }
   .fact {
@@ -2086,7 +2088,8 @@ button:disabled {
     gap: 7px;
     margin-bottom: 9px;
   }
-  .graph {
+  .graph,
+  .history-placeholder {
     height: 102px;
     margin: 8px 0 10px;
   }

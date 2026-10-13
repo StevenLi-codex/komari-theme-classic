@@ -137,10 +137,17 @@ async function hub(
     delayNodes?: boolean;
     config?: unknown;
     pingHistory?: unknown;
+    nodes?: (typeof node)[];
+    historyDelay?: number;
+    limitedHistory?: boolean;
+    transientHistory?: boolean;
   } = {},
 ) {
   let socket: WebSocketRoute | undefined;
   const historyRequests: string[] = [];
+  let activeHistory = 0,
+    peakHistory = 0,
+    rejectedHistory = 0;
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     let value: unknown = {};
@@ -150,9 +157,28 @@ async function hub(
     else if (url.pathname === "/api/nodes") {
       if (options.delayNodes)
         await new Promise((resolve) => setTimeout(resolve, 400));
-      value = { nodes: [node] };
+      value = { nodes: options.nodes ?? [node] };
     } else if (url.pathname.endsWith("/metrics")) {
       historyRequests.push(url.search);
+      activeHistory++;
+      peakHistory = Math.max(peakHistory, activeHistory);
+      const busy =
+        (options.limitedHistory && activeHistory > 4) ||
+        (options.transientHistory && historyRequests.length === 1);
+      if (options.historyDelay)
+        await new Promise((resolve) =>
+          setTimeout(resolve, options.historyDelay),
+        );
+      activeHistory--;
+      if (busy) {
+        rejectedHistory++;
+        await route.fulfill({
+          status: 503,
+          contentType: "text/plain",
+          body: "查询历史的请求太多，稍后再试",
+        });
+        return;
+      }
       if (
         options.historyError &&
         url.searchParams.get("series") === "metrics"
@@ -202,10 +228,145 @@ async function hub(
   await page.routeWebSocket("**/api/ws**", (ws) => {
     socket = ws;
     if (options.noSocket) ws.close();
-    else ws.send(JSON.stringify({ nodes: [node] }));
+    else ws.send(JSON.stringify({ nodes: options.nodes ?? [node] }));
   });
-  return { socket: () => socket, historyRequests };
+  return {
+    socket: () => socket,
+    historyRequests,
+    peak: () => peakHistory,
+    rejected: () => rejectedHistory,
+  };
 }
+
+test("realtime frames keep scroll containers and cards connected while scrolling", async ({
+  page,
+}) => {
+  const nodes = Array.from({ length: 19 }, (_, i) => ({
+    ...node,
+    id: i + 1,
+    name: `Node ${i + 1}`,
+  }));
+  const backend = await hub(page, { nodes, historyDelay: 80 });
+  await page.goto("/");
+  await expect(page.locator(".node-window")).toHaveCount(19);
+  const content = await page.locator(".content").elementHandle();
+  const tree = await page.locator(".tree-scroll").elementHandle();
+  const card = await page.locator(".node-window").first().elementHandle();
+  await content!.evaluate((el) => {
+    el.scrollTop = 300;
+  });
+  backend.socket()!.send(
+    JSON.stringify({
+      nodes: nodes.map((n) => ({ ...n, metrics: { ...metrics, cpu: 82 } })),
+    }),
+  );
+  await expect(page.locator(".meter-number").first()).toHaveText("82%");
+  for (const element of [content, tree, card])
+    expect(await element!.evaluate((el) => el.isConnected)).toBe(true);
+  const box = await page.locator(".content").boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + 150);
+  for (let i = 0; i < 5; i++) {
+    const before = await content!.evaluate((el) => el.scrollTop);
+    backend.socket()!.send(JSON.stringify({ nodes }));
+    await page.mouse.wheel(0, 120);
+    await expect
+      .poll(() => content!.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(before);
+  }
+});
+
+test("19 nodes and refresh respect Hub's four history slots and retry transient busy responses", async ({
+  page,
+}) => {
+  const nodes = Array.from({ length: 19 }, (_, i) => ({
+    ...node,
+    id: i + 1,
+    name: `Node ${i + 1}`,
+  }));
+  const backend = await hub(page, {
+    nodes,
+    historyDelay: 80,
+    limitedHistory: true,
+    transientHistory: true,
+  });
+  await page.goto("/");
+  await expect(page.locator(".node-window .graph")).toHaveCount(19, {
+    timeout: 15000,
+  });
+  expect(backend.peak()).toBeLessThanOrEqual(4);
+  expect(backend.rejected()).toBe(1);
+  await page.getByRole("button", { name: "↻ 刷新", exact: true }).click();
+  await expect
+    .poll(() => backend.historyRequests.length)
+    .toBeGreaterThanOrEqual(77);
+  await expect(page.locator(".node-window .graph")).toHaveCount(19);
+  expect(backend.peak()).toBeLessThanOrEqual(4);
+  await expect(page.locator(".history-error")).toHaveCount(0);
+});
+
+test("loading history occupies the same card height as a loaded chart", async ({
+  page,
+}) => {
+  await hub(page, { historyDelay: 700 });
+  await page.goto("/");
+  await expect(page.locator(".history-placeholder")).toHaveCount(1);
+  const loading = (await page.locator(".node-window").boundingBox())!.height;
+  await expect(page.locator(".node-window .graph")).toHaveCount(1);
+  const loaded = (await page.locator(".node-window").boundingBox())!.height;
+  expect(Math.abs(loading - loaded)).toBeLessThanOrEqual(1);
+});
+
+for (const layout of ["desktop", "compact", "mobile"]) {
+  test(`failed history keeps the chart height in ${layout} layout`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({
+      width: layout === "mobile" ? 540 : 1280,
+      height: 900,
+    });
+    const options = { historyError: true };
+    await hub(page, options);
+    await page.goto("/");
+    if (layout === "compact")
+      await page.locator("#view-select").selectOption("compact");
+    await expect(page.locator(".history-error")).toHaveCount(1);
+    const failed = (await page.locator(".node-window").boundingBox())!.height;
+    options.historyError = false;
+    await page.getByRole("button", { name: "↻ 刷新", exact: true }).click();
+    await expect(page.locator(".node-window .graph")).toHaveCount(1);
+    const loaded = (await page.locator(".node-window").boundingBox())!.height;
+    expect(Math.abs(failed - loaded)).toBeLessThanOrEqual(1);
+  });
+}
+
+test("region names stay consistent across sidebar cards and details", async ({
+  page,
+}) => {
+  await hub(page, {
+    nodes: [
+      { ...node, country: "TW" },
+      { ...node, id: 2, country: "HK" },
+    ],
+  });
+  await page.goto("/");
+  for (const [id, name] of [
+    [1, "中国台湾"],
+    [2, "中国香港"],
+  ] as const) {
+    await expect(
+      page.locator(`.nav-row[data-scope="country:${id === 1 ? "TW" : "HK"}"]`),
+    ).toContainText(name);
+    await expect(page.locator(`.node-window[data-node="${id}"]`)).toContainText(
+      name,
+    );
+    await page.goto(`/#/node/${id}`);
+    await expect(page.locator(".detail-header")).toContainText(name);
+    await expect(page.locator(".detail-header")).not.toContainText(
+      "特别行政区",
+    );
+    await page.goto("/");
+  }
+});
 
 test("text and gzip updates preserve search selection and card control focus", async ({
   page,

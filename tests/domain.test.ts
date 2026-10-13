@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nodeState, age, expDays, speed } from "../src/format.ts";
+import { nodeState, age, expDays, speed, locationName } from "../src/format.ts";
 import { sanitizeNodes, getMe } from "../src/api.ts";
 import { chartSvg, chartFromHistory } from "../src/chart.ts";
 import { loadConfig, defaults } from "../src/config.ts";
@@ -75,4 +75,11 @@ test("malformed station profile cannot reach the page state", async () => {
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("Taiwan region uses the configured Chinese name everywhere", () => {
+  assert.equal(locationName("TW"), "中国台湾");
+  assert.equal(locationName("tw"), "中国台湾");
+  assert.equal(locationName("HK"), "中国香港");
+  assert.equal(locationName("hk"), "中国香港");
 });

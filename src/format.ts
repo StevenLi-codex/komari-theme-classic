@@ -110,6 +110,8 @@ export function html(s: unknown): string {
 }
 export function locationName(code?: string): string {
   if (!code) return "未知地区";
+  if (code.toUpperCase() === "TW") return "中国台湾";
+  if (code.toUpperCase() === "HK") return "中国香港";
   try {
     return (
       new Intl.DisplayNames(["zh-CN"], { type: "region" }).of(

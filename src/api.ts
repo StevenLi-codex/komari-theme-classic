@@ -35,6 +35,21 @@ async function request<T>(url: string, timeout = 15000): Promise<T> {
 }
 export const getNodes = (): Promise<{ nodes: NodeInfo[] }> =>
   request("/api/nodes");
+async function requestHistory<T>(url: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await request<T>(url);
+    } catch (error) {
+      if (
+        !(error instanceof ApiError) ||
+        ![429, 503].includes(error.status) ||
+        attempt >= 3
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+    }
+  }
+}
 export async function getMe(): Promise<Me> {
   const raw = await request<Me>("/api/me");
   if (!raw || typeof raw !== "object" || Array.isArray(raw))
@@ -49,7 +64,7 @@ export async function getMe(): Promise<Me> {
   };
 }
 export async function getHistory(id: number, hours = 24): Promise<NodeHistory> {
-  const data = await request<NodeHistory>(
+  const data = await requestHistory<NodeHistory>(
     `/api/nodes/${id}/metrics?hours=${hours}&points=120&series=metrics`,
   );
   if (!data || !Array.isArray(data.metrics))
@@ -65,7 +80,7 @@ export async function getPing(
   id: number,
   hours = 6,
 ): Promise<import("./types.js").PingHistory> {
-  const data = await request<import("./types.js").PingHistory>(
+  const data = await requestHistory<import("./types.js").PingHistory>(
     `/api/nodes/${id}/metrics?hours=${hours}&points=120&series=ping`,
   );
   if (!data || !Array.isArray(data.ping))

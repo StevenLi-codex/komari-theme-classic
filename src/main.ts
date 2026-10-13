@@ -23,6 +23,7 @@ import {
   valid,
 } from "./format.js";
 import { chartSvg, chartFromHistory, demoChart } from "./chart.js";
+import { updateMarkup } from "./dom.js";
 const root = document.getElementById("app")!;
 const buildVersion =
   document.querySelector<HTMLMetaElement>(
@@ -44,6 +45,8 @@ const history = new Map<
   }
 >();
 const inFlight = new Set<string>();
+// Each node issues two requests; Hub shares four slots across both series.
+const historyNodeLimit = 2;
 let historyHours = 24;
 let historyEpoch = 0;
 const historyKey = (id: number) => `${id}:${historyHours}`;
@@ -97,7 +100,7 @@ const client = new NodeStream((next, err, last, conn) => {
   error = err;
   refreshed = last;
   connection = conn;
-  render();
+  scheduleRender();
   if (config.show_chart || detailId() !== null) void loadVisibleHistories();
 });
 function buttonIcon(type: string): string {
@@ -502,7 +505,7 @@ function detailHistory(node: NodeInfo) {
 }
 function renderNodePage(node: NodeInfo | undefined, id: number): string {
   if (!node)
-    return `<main class="content node-page" id="main-content"><div class="detail-toolbar classic-title">节点详情</div><div class="detail-inner"><div class="empty-state"><p>${!nodes ? (error ? html(error) : "正在读取节点详情……") : `未找到编号为 ${id} 的节点`}</p><small>${!nodes ? "正在连接 Monitor Hub" : "节点可能已删除或无权查看"}</small><button class="classic-button" data-action="${!nodes && error ? "refresh" : "back"}">${!nodes && error ? "重试连接" : "← 返回节点列表"}</button></div></div></main>`;
+    return `<main class="content node-page" id="main-content" tabindex="-1"><div class="detail-toolbar classic-title">节点详情</div><div class="detail-inner"><div class="empty-state"><p>${!nodes ? (error ? html(error) : "正在读取节点详情……") : `未找到编号为 ${id} 的节点`}</p><small>${!nodes ? "正在连接 Monitor Hub" : "节点可能已删除或无权查看"}</small><button class="classic-button" data-action="${!nodes && error ? "refresh" : "back"}">${!nodes && error ? "重试连接" : "← 返回节点列表"}</button></div></div></main>`;
   const m = node.metrics,
     st = nodeState(node),
     validMonth = valid(node.month_used) ? node.month_used : null;
@@ -566,7 +569,7 @@ function renderNodePage(node: NodeInfo | undefined, id: number): string {
   } else {
     content = `${detailPanel("系统和硬件", grouped(["操作系统", node.os || "未提供"], ["主机名", node.hostname || "未提供"], ["内核", node.kernel || "未提供"], ["系统架构", node.arch || "未提供"], ["虚拟化", node.virt || "未提供"], ["CPU 型号", node.cpu_name || "未提供"], ["CPU 核心", node.cpu_cores ?? "未提供"], ["内存总量", bytes(m?.mem_total ?? node.mem_total)], ["硬盘总量", bytes(m?.disk_total ?? node.disk_total)], ["网络地址", node.ip || "未公开"], ["到期剩余天数", expDays(node) === null ? "未设置" : `${expDays(node)} 天`], ["公开备注", node.public_remark || "—"]))}`;
   }
-  return `<main class="content node-page" id="main-content"><div class="detail-toolbar classic-title">${navigationToggle()}${flagImage(node.country, "title-flag")}<span>${html(node.name)} · 属性</span><button class="title-btn" data-action="back" title="返回节点列表" aria-label="返回节点列表">×</button></div>
+  return `<main class="content node-page" id="main-content" tabindex="-1"><div class="detail-toolbar classic-title">${navigationToggle()}${flagImage(node.country, "title-flag")}<span>${html(node.name)} · 属性</span><button class="title-btn" data-action="back" title="返回节点列表" aria-label="返回节点列表">×</button></div>
     <div class="detail-inner"><div class="detail-navigation"><button class="classic-button" data-action="back">← 返回节点列表</button><span>节点属性 / ${html(node.name)}</span></div>
     <div class="detail-header">${flagImage(node.country, "detail-flag")}<div><h1>${html(node.name)}</h1><p><span class="status-dot ${st}"></span> ${stateZh(st)} · ${html(locationName(node.country))} · #${node.id}</p></div></div>
     ${error ? `<div class="error-banner" role="alert">${html(error)} <button data-action="refresh">重试</button></div>` : ""}
@@ -590,7 +593,7 @@ function renderMain() {
     );
   const result = visible(),
     a = nodes || [];
-  return `<main class="content" id="main-content"><div class="content-toolbar classic-title"><div class="toolbar-name">${navigationToggle()} <span>${html(scopeText())}（${result.length} 台）</span></div>
+  return `<main class="content" id="main-content" tabindex="-1"><div class="content-toolbar classic-title"><div class="toolbar-name">${navigationToggle()} <span>${html(scopeText())}（${result.length} 台）</span></div>
     <div class="toolbar-right"><label class="toolbar-search" title="搜索节点"><span aria-hidden="true">⌕</span><input id="search-box" aria-label="搜索节点" placeholder="搜索名称、地区、分组" value="${html(search)}" /></label><label class="view-label" for="view-select">视图</label><select id="view-select" aria-label="卡片视图"><option value="cards" ${view === "cards" ? "selected" : ""}>卡片视图</option><option value="compact" ${view === "compact" ? "selected" : ""}>紧凑卡片</option></select>
     </div></div>
     ${isDemo ? '<div class="demo-banner" role="note"><strong>演示环境</strong><span>当前页面使用示例数据</span><a href="/">查看实时站点 ↗</a></div>' : ""}
@@ -605,7 +608,7 @@ function renderMain() {
           : `<div class="skeleton-grid" aria-label="正在加载节点">${Array.from({ length: 6 }, () => '<div class="skeleton-card"><div></div><span></span><span></span><span></span></div>').join("")}</div>`
         : !result.length
           ? `<div class="empty-state">${buttonIcon("folder")}<p>${a.length ? "没有匹配的节点" : "暂无节点"}</p><small>可以尝试切换分组、清空搜索，或恢复隐藏的卡片。</small><button class="classic-button" data-action="reset">显示全部节点</button></div>`
-          : `<div class="node-grid ${view === "compact" ? "compact-grid" : ""}" style="--cols:${config.columns}">${result.map((n) => `<div class="node-slot">${nodeCard(n)}</div>`).join("")}</div>`
+          : `<div class="node-grid ${view === "compact" ? "compact-grid" : ""}" style="--cols:${config.columns}">${result.map((n) => `<div class="node-slot" data-key="node-slot-${n.id}">${nodeCard(n)}</div>`).join("")}</div>`
     }
   </main>`;
 }
@@ -663,7 +666,14 @@ function renderModal() {
   }
   return `<div class="modal-backdrop" data-action="close-modal"><section class="dialog-window" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"><div class="classic-title dialog-title"><span id="modal-title">${html(title)}</span><button class="title-btn" data-action="close-modal" aria-label="关闭弹窗">×</button></div><div class="dialog-body">${content}<div class="dialog-footer"><button class="classic-button" data-action="close-modal">确定</button></div></div></section></div>`;
 }
+let pendingRender: number | undefined;
+function scheduleRender() {
+  if (pendingRender === undefined)
+    pendingRender = requestAnimationFrame(() => render());
+}
 function render() {
+  if (pendingRender !== undefined) cancelAnimationFrame(pendingRender);
+  pendingRender = undefined;
   // Re-rendering on each realtime frame must preserve the search caret and tree scroll position.
   const active = document.activeElement as HTMLInputElement | null;
   const keepSearch = active?.id === "search-box";
@@ -694,13 +704,16 @@ function render() {
         ? listScroll
         : 0;
   previousRoute = routeKey;
-  root.innerHTML = `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/favicon.svg" alt="" /><div><span class="brand-kicker">MONITOR CLASSIC / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
-   ${renderSidebar()}<div class="main-column">${renderMain()}</div></div>${renderStatus()}</div>${renderModal()}`;
+  updateMarkup(
+    root,
+    `<div class="desktop-shell ${!(preferredSidebar ?? config.show_sidebar) || !sidebarOpen ? "navigation-off" : ""}" ${modal ? "inert" : ""}><header class="desktop-heading"><div class="desktop-brand"><img src="/favicon.svg" alt="" /><div><span class="brand-kicker">MONITOR CLASSIC / SYSTEM CONSOLE</span><h1>${html(config.site_label || me.site_name || "节点管理器")}</h1></div></div><div class="desktop-actions"><span class="session-label"><span class="status-dot ${isDemo || connection === "Live" ? "online" : "offline"}"></span>${isDemo ? "演示环境" : connection === "Live" ? "实时监控" : "正在同步"}</span><button class="classic-button" data-action="refresh">↻ 刷新</button><a class="classic-button admin-link" href="/admin">管理后台 ↗</a></div></header><div class="workarea">
+   ${renderSidebar()}<div class="main-column" data-key="main-column">${renderMain()}</div></div>${renderStatus()}</div>${renderModal()}`,
+  );
   const tree = root.querySelector(".tree-scroll");
-  if (tree) tree.scrollTop = treeTop;
+  if (tree && tree.scrollTop !== treeTop) tree.scrollTop = treeTop;
   const main = root.querySelector(".content");
-  if (main) main.scrollTop = bodyTop;
-  if (focusSelector) {
+  if (main && main.scrollTop !== bodyTop) main.scrollTop = bodyTop;
+  if (focusSelector && !active?.isConnected) {
     const container =
       inDialog && modal ? root.querySelector(".dialog-window") : root;
     const element = container?.querySelector<HTMLElement>(focusSelector);
@@ -731,7 +744,7 @@ async function loadVisibleHistories() {
         ? visible().map((n) => n.id)
         : [];
   for (const id of ids) {
-    if (inFlight.size >= 4) return;
+    if (inFlight.size >= historyNodeLimit) return;
     const key = historyKey(id),
       epoch = historyEpoch,
       hours = historyHours;
@@ -778,7 +791,7 @@ async function loadVisibleHistories() {
                 ? (hist.reason as Error).message
                 : undefined,
           });
-          render();
+          scheduleRender();
         }
       } catch (e) {
         if (epoch === historyEpoch && !document.hidden) {
@@ -788,11 +801,11 @@ async function loadVisibleHistories() {
             time: Date.now(),
             error: (e as Error).message,
           });
-          render();
+          scheduleRender();
         }
       } finally {
         inFlight.delete(key);
-        if (inFlight.size < 4) void loadVisibleHistories();
+        if (inFlight.size < historyNodeLimit) void loadVisibleHistories();
       }
     })();
   }
@@ -908,7 +921,7 @@ root.addEventListener("click", (event) => {
     }
     case "refresh":
       historyEpoch++;
-      history.clear();
+      for (const cached of history.values()) cached.time = 0;
       client.refresh();
       void loadVisibleHistories();
       break;
